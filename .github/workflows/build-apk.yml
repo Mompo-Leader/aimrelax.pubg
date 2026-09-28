@@ -12,26 +12,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # 1. Download repository
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract project
+      # 2. Check that V3 ZIP exists
+      - name: Check V3 ZIP
         run: |
-          mkdir -p build_project
+          echo "Files in repository:"
+          ls -lah
 
-          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ZIP file not found"
+          if [ ! -f "./AIMRELAX_LIVE_FIXED_V3.zip" ]; then
+            echo "ERROR: AIMRELAX_LIVE_FIXED_V3.zip not found!"
             exit 1
           fi
 
-          unzip -o "$ZIP_FILE" -d build_project
+          echo "V3 ZIP found successfully."
+
+      # 3. Extract ONLY V3
+      - name: Extract V3 project
+        run: |
+          rm -rf build_project
+          mkdir -p build_project
+
+          unzip -o "./AIMRELAX_LIVE_FIXED_V3.zip" -d build_project
+
+          echo "Extracted files:"
+          find build_project -maxdepth 3 -type f | head -100
 
           PUBSPEC=$(find build_project -name pubspec.yaml -type f | head -n 1)
 
           if [ -z "$PUBSPEC" ]; then
-            echo "pubspec.yaml not found"
+            echo "ERROR: pubspec.yaml not found!"
             exit 1
           fi
 
@@ -39,22 +52,60 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+          echo "Project directory:"
+          echo "$PROJECT_DIR"
+
+      # 4. Check Supabase URLs BEFORE Flutter build
+      - name: Verify Supabase configuration
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "Checking Supabase configuration..."
+
+          echo ""
+          echo "Correct Supabase hostname:"
+          grep -RIn "hvhlrbfjloiahbqmnrly.supabase.co" . \
+            --exclude-dir=.git \
+            --exclude-dir=build \
+            --exclude-dir=.dart_tool \
+            || true
+
+          echo ""
+          echo "Checking for OLD Supabase hostname..."
+
+          if grep -RIn "hvhirbfjloiahbqmnrly.supabase.co" . \
+            --exclude-dir=.git \
+            --exclude-dir=build \
+            --exclude-dir=.dart_tool; then
+
+            echo ""
+            echo "ERROR: OLD Supabase hostname FOUND!"
+            echo "Build stopped intentionally."
+            exit 1
+          fi
+
+          echo ""
+          echo "SUCCESS: OLD Supabase hostname was NOT found."
+
+      # 5. Setup Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
+      # 6. Generate modern Android project
       - name: Generate modern Android project
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           rm -rf android
+
           flutter create \
             --platforms=android \
             --org=com.aimrelax \
             --project-name=aimrelax_live \
             .
 
+      # 7. Configure Android
       - name: Configure Android
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
@@ -65,19 +116,20 @@ jobs:
 
           s = p.read_text()
 
-          s = s.replace(
-              '<uses-permission android:name="android.permission.INTERNET"/>',
-              '''<uses-permission android:name="android.permission.INTERNET"/>
-              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-              <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
-              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-              <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-              <uses-permission android:name="android.permission.CAMERA"/>
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>'''
-          )
+          if '<uses-permission android:name="android.permission.INTERNET"/>' in s:
+              s = s.replace(
+                  '<uses-permission android:name="android.permission.INTERNET"/>',
+                  '''<uses-permission android:name="android.permission.INTERNET"/>
+          <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+          <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
+          <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+          <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+          <uses-permission android:name="android.permission.CAMERA"/>
+          <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+          <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+          <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+          <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>'''
+              )
 
           p.write_text(s)
           PY
@@ -86,29 +138,81 @@ jobs:
           from pathlib import Path
 
           p = Path("android/app/build.gradle.kts")
+
           if p.exists():
               s = p.read_text()
 
-              if "minSdk = 23" not in s:
-                  s = s.replace(
-                      "minSdk = flutter.minSdkVersion",
-                      "minSdk = 23"
-                  )
+              s = s.replace(
+                  "minSdk = flutter.minSdkVersion",
+                  "minSdk = 23"
+              )
 
               p.write_text(s)
           PY
 
+      # 8. Get Flutter dependencies
       - name: Get dependencies
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter pub get
+        run: |
+          flutter pub get
 
+      # 9. FINAL SOURCE CHECK
+      # This check happens immediately before APK build.
+      - name: Final Supabase URL check
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "========== FINAL SUPABASE CHECK =========="
 
+          echo ""
+          echo "Correct hostname occurrences:"
+          grep -RIn "hvhlrbfjloiahbqmnrly.supabase.co" . \
+            --exclude-dir=.git \
+            --exclude-dir=build \
+            --exclude-dir=.dart_tool \
+            || true
+
+          echo ""
+          echo "Old hostname occurrences:"
+
+          if grep -RIn "hvhirbfjloiahbqmnrly.supabase.co" . \
+            --exclude-dir=.git \
+            --exclude-dir=build \
+            --exclude-dir=.dart_tool; then
+
+            echo ""
+            echo "ERROR: OLD HOSTNAME FOUND BEFORE BUILD!"
+            exit 1
+          fi
+
+          echo ""
+          echo "FINAL CHECK PASSED."
+          echo "No old hvhir hostname exists in the source."
+
+      # 10. Build APK
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release
 
+      # 11. Verify APK exists
+      - name: Verify APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not created!"
+            exit 1
+          fi
+
+          echo ""
+          echo "APK successfully created:"
+          ls -lh "$APK"
+
+      # 12. Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIMRELAX-LIVE-Android
+          name: AIMRELAX-LIVE-Android-V3
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
