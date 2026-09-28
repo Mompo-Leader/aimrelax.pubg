@@ -46,8 +46,7 @@ jobs:
           echo "PROJECT FOUND:"
           echo "$PROJECT_DIR"
 
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
+          echo "PROJECT_DIR=$PROJECT_DIR" >
       - name: Inspect Live files
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
