@@ -237,4 +237,107 @@ jobs:
 
               p.write_text(s)
 
-              print("minSdk configured to 
+              print("minSdk configured to 23.")
+          else:
+              print("build.gradle.kts not found.")
+          PY
+
+
+      # =========================
+      # 10. Get dependencies
+      # =========================
+      - name: Get dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "======================================"
+          echo "Flutter pub get..."
+          echo "======================================"
+
+          flutter pub get
+
+
+      # =========================
+      # 11. Final Supabase check
+      # =========================
+      - name: Final Supabase URL check
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+
+          echo "======================================"
+          echo "FINAL SUPABASE CHECK"
+          echo "======================================"
+
+          echo ""
+          echo "Correct URL:"
+          grep -RIn "https://hvhlrbfjloiahbqmnrly.supabase.co" . \
+            --exclude-dir=.git \
+            --exclude-dir=build \
+            --exclude-dir=.dart_tool \
+            || true
+
+          echo ""
+          echo "Checking OLD URL..."
+
+          if grep -RIn "hvhirbfjloiahbqmnrly.supabase.co" . \
+            --exclude-dir=.git \
+            --exclude-dir=build \
+            --exclude-dir=.dart_tool; then
+
+            echo ""
+            echo "ERROR: OLD HOSTNAME FOUND BEFORE BUILD!"
+            exit 1
+          fi
+
+          echo ""
+          echo "FINAL CHECK PASSED."
+
+
+      # =========================
+      # 12. Build APK
+      # =========================
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+
+          echo "======================================"
+          echo "BUILDING AIMRELAX LIVE V6"
+          echo "======================================"
+
+          flutter build apk --release
+
+          echo ""
+          echo "APK BUILD FINISHED."
+
+
+      # =========================
+      # 13. Verify APK
+      # =========================
+      - name: Verify APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+
+          echo "======================================"
+          echo "VERIFYING APK"
+          echo "======================================"
+
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not created!"
+            exit 1
+          fi
+
+          echo ""
+          echo "APK successfully created:"
+          ls -lh "$APK"
+
+
+      # =========================
+      # 14. Upload V6 APK
+      # =========================
+      - name: Upload V6 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIMRELAX-LIVE-Android-V6
+          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
