@@ -1,4 +1,4 @@
-name: Build AIMRELAX LIVE Android
+name: Build AIMRELAX LIVE APK
 
 on:
   workflow_dispatch:
@@ -16,15 +16,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Find AIMRELAX Flutter project
+      - name: Check V6 ZIP
         run: |
           echo "======================================"
-          echo "FINDING AIMRELAX LIVE PROJECT"
+          echo "CHECKING V6 ZIP"
           echo "======================================"
+
+          ls -lah
+
+          if [ ! -f "AIMRELAX_LIVE_FIXED_V6.zip" ]; then
+            echo "ERROR: AIMRELAX_LIVE_FIXED_V6.zip not found!"
+            exit 1
+          fi
+
+          echo "V6 ZIP FOUND."
+
+      - name: Extract V6 project
+        run: |
+          echo "======================================"
+          echo "EXTRACTING AIMRELAX LIVE PROJECT"
+          echo "======================================"
+
+          rm -rf build_project
+          mkdir -p build_project
+
+          unzip -o "AIMRELAX_LIVE_FIXED_V6.zip" -d build_project
+
+          echo ""
+          echo "Searching for Flutter project..."
 
           PROJECT_DIR=""
 
           while IFS= read -r pubspec; do
+
             DIR=$(dirname "$pubspec")
 
             if [ -f "$DIR/lib/main.dart" ] && \
@@ -33,42 +57,84 @@ jobs:
 
               PROJECT_DIR="$DIR"
               break
+
             fi
 
-          done < <(find . -type f -name "pubspec.yaml")
+          done < <(find build_project -type f -name "pubspec.yaml")
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: AIMRELAX LIVE Flutter project not found."
-            find . -type f -name "pubspec.yaml"
+
+            echo ""
+            echo "ERROR: AIMRELAX LIVE project not found!"
+            echo ""
+
+            echo "All pubspec files:"
+            find build_project -type f -name "pubspec.yaml" -print
+
+            echo ""
+            echo "All Dart files:"
+            find build_project -type f -name "*.dart" -print | head -200
+
             exit 1
           fi
 
-          echo "PROJECT FOUND:"
+          echo ""
+          echo "======================================"
+          echo "PROJECT FOUND"
+          echo "======================================"
           echo "$PROJECT_DIR"
 
-          echo "PROJECT_DIR=$PROJECT_DIR" >
-      - name: Inspect Live files
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Inspect project
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "LIVE FILES"
+          echo "PROJECT INSPECTION"
+          echo "======================================"
+
+          echo ""
+          echo "Current directory:"
+          pwd
+
+          echo ""
+          echo "Flutter files:"
+          find lib -type f -name "*.dart" -print
+
+          echo ""
+          echo "Live screen:"
+          ls -lh lib/screens/live_screen.dart
+
+          echo ""
+          echo "Live service:"
+          ls -lh lib/live/live_service.dart
+
+      - name: Diagnose Live screen capture
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "======================================"
+          echo "LIVE SCREEN CAPTURE DIAGNOSTIC"
           echo "======================================"
 
           echo ""
           echo "live_screen.dart:"
-          ls -lh lib/screens/live_screen.dart
+          grep -nEi \
+            "getDisplayMedia|displayMedia|MediaProjection|screenCapture|screen capture|navigator.mediaDevices|flutter_webrtc" \
+            lib/screens/live_screen.dart \
+            || true
 
           echo ""
           echo "live_service.dart:"
-          ls -lh lib/live/live_service.dart
+          grep -nEi \
+            "getDisplayMedia|displayMedia|MediaProjection|screenCapture|screen capture|navigator.mediaDevices|flutter_webrtc" \
+            lib/live/live_service.dart \
+            || true
 
           echo ""
-          echo "Searching screen capture code..."
-
-          grep -nEi \
-            "getDisplayMedia|displayMedia|MediaProjection|screenCapture|screen capture|navigator.mediaDevices" \
-            lib/screens/live_screen.dart \
-            lib/live/live_service.dart \
+          echo "All Dart files:"
+          grep -RInEi \
+            "navigator.mediaDevices|getDisplayMedia|MediaProjection|screenCapture" \
+            lib \
             || true
 
       - name: Setup Flutter
@@ -92,11 +158,11 @@ jobs:
             --project-name=aimrelax_live \
             .
 
-      - name: Configure Android MediaProjection
+      - name: Configure Android permissions
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "CONFIGURING ANDROID SCREEN CAPTURE"
+          echo "CONFIGURING ANDROID MEDIA PROJECTION"
           echo "======================================"
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
@@ -109,36 +175,37 @@ jobs:
           text = path.read_text()
 
           permissions = [
-              'android.permission.INTERNET',
-              'android.permission.ACCESS_NETWORK_STATE',
-              'android.permission.CHANGE_NETWORK_STATE',
-              'android.permission.MODIFY_AUDIO_SETTINGS',
-              'android.permission.RECORD_AUDIO',
-              'android.permission.CAMERA',
-              'android.permission.FOREGROUND_SERVICE',
-              'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
-              'android.permission.FOREGROUND_SERVICE_MICROPHONE',
-              'android.permission.POST_NOTIFICATIONS',
+              "android.permission.INTERNET",
+              "android.permission.ACCESS_NETWORK_STATE",
+              "android.permission.CHANGE_NETWORK_STATE",
+              "android.permission.MODIFY_AUDIO_SETTINGS",
+              "android.permission.RECORD_AUDIO",
+              "android.permission.CAMERA",
+              "android.permission.FOREGROUND_SERVICE",
+              "android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION",
+              "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+              "android.permission.POST_NOTIFICATIONS",
           ]
 
           for permission in permissions:
+
               line = f'<uses-permission android:name="{permission}"/>'
 
               if line not in text:
                   text = text.replace(
-                      '<application',
-                      f'    {line}\n\n    <application',
+                      "<application",
+                      f"    {line}\n\n    <application",
                       1
                   )
 
           path.write_text(text)
 
-          print("MediaProjection permissions configured.")
+          print("Android permissions configured.")
           PY
 
           echo ""
-          echo "AndroidManifest permissions:"
-          grep -n "permission" "$MANIFEST"
+          echo "Configured permissions:"
+          grep -n "uses-permission" "$MANIFEST"
 
       - name: Configure minimum SDK
         working-directory: ${{ env.PROJECT_DIR }}
@@ -149,76 +216,48 @@ jobs:
             sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' "$GRADLE"
           fi
 
-          echo "Minimum Android SDK configured."
+          echo "Minimum SDK configured."
 
-      - name: Get Flutter dependencies
+      - name: Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
+          echo "======================================"
+          echo "FLUTTER PUB GET"
+          echo "======================================"
+
           flutter pub get
 
-      - name: Verify flutter_webrtc
+      - name: Verify WebRTC
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "VERIFYING FLUTTER WEBRTC"
+          echo "VERIFYING WEBRTC"
           echo "======================================"
 
-          if grep -n "flutter_webrtc" pubspec.yaml; then
-            echo ""
-            echo "flutter_webrtc dependency found."
-          else
-            echo ""
-            echo "ERROR: flutter_webrtc is missing."
-            exit 1
-          fi
+          grep -n "flutter_webrtc" pubspec.yaml
 
           echo ""
           flutter pub deps | grep flutter_webrtc || true
 
-      - name: Verify Live implementation
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "LIVE IMPLEMENTATION CHECK"
-          echo "======================================"
-
-          echo ""
-          echo "Checking live_screen.dart..."
-
-          grep -nEi \
-            "getDisplayMedia|displayMedia|MediaProjection|screenCapture|screen capture|navigator.mediaDevices" \
-            lib/screens/live_screen.dart \
-            || true
-
-          echo ""
-          echo "Checking live_service.dart..."
-
-          grep -nEi \
-            "getDisplayMedia|displayMedia|MediaProjection|screenCapture|screen capture|navigator.mediaDevices" \
-            lib/live/live_service.dart \
-            || true
-
-          echo ""
-          echo "Checking all Dart files..."
-
-          grep -RInEi \
-            "navigator.mediaDevices|getDisplayMedia" \
-            lib \
-            || true
-
       - name: Clean build
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
+          echo "======================================"
+          echo "CLEAN BUILD"
+          echo "======================================"
+
           flutter clean
+
           rm -rf build
           rm -rf .dart_tool
+
           flutter pub get
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "BUILDING AIMRELAX LIVE"
+          echo "BUILDING AIMRELAX LIVE APK"
           echo "======================================"
 
           flutter build apk --release
@@ -226,10 +265,14 @@ jobs:
       - name: Verify APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
+          echo "======================================"
+          echo "VERIFYING APK"
+          echo "======================================"
+
           APK="build/app/outputs/flutter-apk/app-release.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not created."
+            echo "ERROR: APK NOT FOUND!"
             exit 1
           fi
 
@@ -246,6 +289,8 @@ jobs:
             build/app/outputs/flutter-apk/app-release.apk \
             release/AIMRELAX-LIVE-NATIVE-SCREEN.apk
 
+          echo ""
+          echo "FINAL APK:"
           ls -lh release/AIMRELAX-LIVE-NATIVE-SCREEN.apk
 
       - name: Upload APK
