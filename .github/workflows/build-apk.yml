@@ -23,15 +23,15 @@ jobs:
           echo "Files in repository:"
           ls -lah
 
-          if [ ! -f "./AIMRELAX_LIVE_FIXED_V4.zip" ]; then
-            echo "ERROR: AIMRELAX_LIVE_FIXED_V4.zip not found!"
+          if [ ! -f "./AIMRELAX_LIVE_FIXED_V5.zip" ]; then
+            echo "ERROR: AIMRELAX_LIVE_FIXED_V5.zip not found!"
             exit 1
           fi
 
           echo "V5 ZIP found successfully."
 
-      # 3. Extract ONLY V4
-      - name: Extract V4 project
+      # 3. Extract ONLY V5
+      - name: Extract V5 project
         run: |
           rm -rf build_project
           mkdir -p build_project
