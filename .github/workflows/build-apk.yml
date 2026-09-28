@@ -211,8 +211,8 @@ jobs:
 
       # 12. Upload APK
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
-          name: AIMRELAX-LIVE-Android-V4
+          name: AIMRELAX-LIVE-Android-V5
           path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
