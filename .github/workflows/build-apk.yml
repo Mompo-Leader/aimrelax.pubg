@@ -15,10 +15,10 @@ jobs:
 
       # 1. Download repository
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      # 2. Check that V3 ZIP exists
-      - name: Check V4 ZIP
+      # 2. Check that V5 ZIP exists
+      - name: Check V5 ZIP
         run: |
           echo "Files in repository:"
           ls -lah
@@ -28,7 +28,7 @@ jobs:
             exit 1
           fi
 
-          echo "V4 ZIP found successfully."
+          echo "V5 ZIP found successfully."
 
       # 3. Extract ONLY V4
       - name: Extract V4 project
@@ -36,7 +36,7 @@ jobs:
           rm -rf build_project
           mkdir -p build_project
 
-          unzip -o "./AIMRELAX_LIVE_FIXED_V4.zip" -d build_project
+          unzip -o "./AIMRELAX_LIVE_FIXED_V5.zip" -d build_project
 
           echo "Extracted files:"
           find build_project -maxdepth 3 -type f | head -100
