@@ -316,6 +316,35 @@ jobs:
           echo ""
           echo "Android configuration completed."
 
+                - name: Diagnose LIVE screen capture
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "======================================"
+          echo "AIMRELAX LIVE SCREEN CAPTURE DIAGNOSTIC"
+          echo "======================================"
+
+          echo ""
+          echo "LIVE SCREEN:"
+          grep -nEi "getDisplayMedia|displayMedia|screen|capture|MediaProjection|RTCVideoRenderer|flutter_webrtc" \
+            lib/screens/live_screen.dart || true
+
+          echo ""
+          echo "LIVE SERVICE:"
+          grep -nEi "getDisplayMedia|displayMedia|screen|capture|MediaProjection|RTCPeerConnection|MediaStream|flutter_webrtc" \
+            lib/live/live_service.dart || true
+
+          echo ""
+          echo "ALL LIVE REFERENCES:"
+          grep -RInEi "getDisplayMedia|displayMedia|MediaProjection|MediaStream|screen capture|screenCapture" \
+            lib android 2>/dev/null || true
+
+          echo ""
+          echo "PUBSPEC WEBRTC:"
+          grep -n "flutter_webrtc" pubspec.yaml || true
+
+          echo ""
+          echo "DIAGNOSTIC COMPLETE."
+
 
       # =========================================================
       # 11. GET DEPENDENCIES
