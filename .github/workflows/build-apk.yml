@@ -15,120 +15,156 @@ jobs:
     name: Build AIMRELAX LIVE V6
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: AIMRELAX_LIVE
-
     steps:
-      # --------------------------------------------------
-      # 1. Download repository
-      # --------------------------------------------------
+      # ---------------------------------------------
+      # 1. Checkout repository
+      # ---------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      # 2. Install Flutter
-      # --------------------------------------------------
+      # ---------------------------------------------
+      # 2. Find Flutter project automatically
+      # ---------------------------------------------
+      - name: Find Flutter project
+        shell: bash
+        run: |
+          echo "Searching for pubspec.yaml..."
+
+          PUBSPEC=$(find . -name "pubspec.yaml" -not -path "./.git/*" | head -n 1)
+
+          if [ -z "$PUBSPEC" ]; then
+            echo "ERROR: pubspec.yaml was not found."
+            echo "This repository does not contain a Flutter project."
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$PUBSPEC")
+
+          if [ "$PROJECT_DIR" = "." ]; then
+            PROJECT_DIR="."
+          else
+            PROJECT_DIR="${PROJECT_DIR#./}"
+          fi
+
+          echo "Flutter project found:"
+          echo "$PROJECT_DIR"
+
+          if [ ! -f "$PROJECT_DIR/lib/main.dart" ]; then
+            echo "ERROR: lib/main.dart not found."
+            exit 1
+          fi
+
+          if [ ! -d "$PROJECT_DIR/android" ]; then
+            echo "ERROR: android directory not found."
+            exit 1
+          fi
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      # ---------------------------------------------
+      # 3. Setup Flutter
+      # ---------------------------------------------
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      # --------------------------------------------------
-      # 3. Check project structure
-      # --------------------------------------------------
-      - name: Verify V6 project
-        run: |
-          echo "Checking AIMRELAX LIVE V6 project..."
-          pwd
-
-          if [ ! -f "pubspec.yaml" ]; then
-            echo "ERROR: pubspec.yaml not found in AIMRELAX_LIVE/"
-            exit 1
-          fi
-
-          if [ ! -f "lib/main.dart" ]; then
-            echo "ERROR: lib/main.dart not found."
-            exit 1
-          fi
-
-          if [ ! -d "android" ]; then
-            echo "ERROR: android directory not found."
-            exit 1
-          fi
-
-          echo "V6 Flutter project detected successfully."
-
-      # --------------------------------------------------
-      # 4. Show Flutter/Dart versions
-      # --------------------------------------------------
-      - name: Flutter version
+      # ---------------------------------------------
+      # 4. Show versions
+      # ---------------------------------------------
+      - name: Flutter and Dart version
         run: |
           flutter --version
           dart --version
 
-      # --------------------------------------------------
-      # 5. Get dependencies
-      # --------------------------------------------------
+      # ---------------------------------------------
+      # 5. Show project structure
+      # ---------------------------------------------
+      - name: Verify project
+        run: |
+          echo "Project directory: $PROJECT_DIR"
+          echo "pubspec.yaml:"
+          ls -la "$PROJECT_DIR"
+
+          echo ""
+          echo "Flutter files:"
+          find "$PROJECT_DIR" -maxdepth 2 -type f \
+            \( -name "*.dart" -o -name "pubspec.yaml" \) \
+            | sort
+
+      # ---------------------------------------------
+      # 6. Get dependencies
+      # ---------------------------------------------
       - name: Flutter pub get
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
-      # --------------------------------------------------
-      # 6. Analyze project
-      # --------------------------------------------------
+      # ---------------------------------------------
+      # 7. Analyze
+      # ---------------------------------------------
       - name: Flutter analyze
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter analyze --no-fatal-infos
 
-      # --------------------------------------------------
-      # 7. Clean old build files
-      # --------------------------------------------------
+      # ---------------------------------------------
+      # 8. Clean
+      # ---------------------------------------------
       - name: Flutter clean
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter clean
 
-      # --------------------------------------------------
-      # 8. Get dependencies again after clean
-      # --------------------------------------------------
+      # ---------------------------------------------
+      # 9. Get dependencies again
+      # ---------------------------------------------
       - name: Flutter pub get after clean
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
-      # --------------------------------------------------
-      # 9. Build release APK
-      # --------------------------------------------------
+      # ---------------------------------------------
+      # 10. Build release APK
+      # ---------------------------------------------
       - name: Build release APK
+        working-directory: ${{ env.PROJECT_DIR }}
         run: flutter build apk --release
 
-      # --------------------------------------------------
-      # 10. Verify APK
-      # --------------------------------------------------
-      - name: Verify generated APK
+      # ---------------------------------------------
+      # 11. Verify APK
+      # ---------------------------------------------
+      - name: Verify APK
         run: |
-          echo "Generated APK files:"
-          find build/app/outputs/flutter-apk \
-            -type f \
-            -name "*.apk" \
-            -print
+          APK="$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk"
 
-          if [ ! -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
-            echo "ERROR: Release APK was not generated."
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not generated."
+            echo ""
+            echo "Searching for generated APK files..."
+            find "$PROJECT_DIR/build" -type f -name "*.apk" -print || true
             exit 1
           fi
 
-      # --------------------------------------------------
-      # 11. Rename APK
-      # --------------------------------------------------
+          echo "APK successfully generated:"
+          ls -lh "$APK"
+
+      # ---------------------------------------------
+      # 12. Rename APK
+      # ---------------------------------------------
       - name: Rename APK
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk \
-             build/app/outputs/flutter-apk/AIMRELAX-LIVE-V6.apk
+          mkdir -p release
 
-      # --------------------------------------------------
-      # 12. Upload APK to GitHub Actions
-      # --------------------------------------------------
+          cp "$PROJECT_DIR/build/app/outputs/flutter-apk/app-release.apk" \
+             release/AIMRELAX-LIVE-V6.apk
+
+          ls -lh release/AIMRELAX-LIVE-V6.apk
+
+      # ---------------------------------------------
+      # 13. Upload APK
+      # ---------------------------------------------
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: AIMRELAX-LIVE-V6
-          path: AIMRELAX_LIVE/build/app/outputs/flutter-apk/AIMRELAX-LIVE-V6.apk
+          path: release/AIMRELAX-LIVE-V6.apk
           if-no-files-found: error
           retention-days: 30
