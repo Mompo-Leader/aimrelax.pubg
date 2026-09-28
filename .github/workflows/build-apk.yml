@@ -1,4 +1,4 @@
-name: Build AIMRELAX LIVE APK
+name: Build AIMRELAX LIVE Android
 
 on:
   workflow_dispatch:
@@ -13,230 +13,76 @@ jobs:
 
     steps:
 
-      # =========================================================
-      # 1. CHECKOUT
-      # =========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
-
-      # =========================================================
-      # 2. CHECK V6 ZIP
-      # =========================================================
-      - name: Check V6 ZIP
+      - name: Find AIMRELAX Flutter project
         run: |
           echo "======================================"
-          echo "CHECKING V6 ZIP"
+          echo "FINDING AIMRELAX LIVE PROJECT"
           echo "======================================"
-
-          ls -lah
-
-          if [ ! -f "./AIMRELAX_LIVE_FIXED_V6.zip" ]; then
-            echo "ERROR: AIMRELAX_LIVE_FIXED_V6.zip not found!"
-            exit 1
-          fi
-
-          echo "SUCCESS: V6 ZIP found."
-
-
-      # =========================================================
-      # 3. SHOW ZIP CONTENTS
-      # =========================================================
-      - name: Inspect V6 ZIP
-        run: |
-          echo "======================================"
-          echo "V6 ZIP CONTENTS"
-          echo "======================================"
-
-          unzip -l "./AIMRELAX_LIVE_FIXED_V6.zip"
-
-          echo ""
-          echo "Checking pubspec files..."
-
-          unzip -l "./AIMRELAX_LIVE_FIXED_V6.zip" | grep "pubspec.yaml" || true
-
-
-      # =========================================================
-      # 4. EXTRACT V6 PROJECT
-      # =========================================================
-      - name: Extract V6 project
-        run: |
-          echo "======================================"
-          echo "EXTRACTING V6 PROJECT"
-          echo "======================================"
-
-          rm -rf build_project
-          mkdir -p build_project
-
-          unzip -o "./AIMRELAX_LIVE_FIXED_V6.zip" -d build_project
-
-          echo ""
-          echo "Searching for AIMRELAX V6 project..."
 
           PROJECT_DIR=""
 
           while IFS= read -r pubspec; do
-
             DIR=$(dirname "$pubspec")
 
-            if [ -f "$DIR/lib/screens/login_screen.dart" ] && \
-               [ -f "$DIR/lib/screens/network_diagnostic_screen.dart" ]; then
+            if [ -f "$DIR/lib/main.dart" ] && \
+               [ -f "$DIR/lib/screens/live_screen.dart" ] && \
+               [ -f "$DIR/lib/live/live_service.dart" ]; then
 
               PROJECT_DIR="$DIR"
               break
-
             fi
 
-          done < <(find build_project -type f -name "pubspec.yaml")
+          done < <(find . -type f -name "pubspec.yaml")
 
           if [ -z "$PROJECT_DIR" ]; then
-            echo ""
-            echo "ERROR: Could not find the V6 Flutter project!"
-            echo ""
-            echo "Available pubspec files:"
-            find build_project -type f -name "pubspec.yaml"
+            echo "ERROR: AIMRELAX LIVE Flutter project not found."
+            find . -type f -name "pubspec.yaml"
             exit 1
           fi
 
-          echo ""
-          echo "V6 PROJECT FOUND:"
+          echo "PROJECT FOUND:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-
-      # =========================================================
-      # 5. INSPECT PROJECT
-      # =========================================================
-      - name: Inspect V6 project
+      - name: Inspect Live files
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "V6 PROJECT INSPECTION"
+          echo "LIVE FILES"
           echo "======================================"
 
           echo ""
-          echo "Current directory:"
-          pwd
+          echo "live_screen.dart:"
+          ls -lh lib/screens/live_screen.dart
 
           echo ""
-          echo "Project files:"
-          ls -lah
+          echo "live_service.dart:"
+          ls -lh lib/live/live_service.dart
 
           echo ""
-          echo "Dart files:"
-          find lib -type f -name "*.dart" -print
+          echo "Searching screen capture code..."
 
-
-      # =========================================================
-      # 6. VERIFY V6 SOURCE
-      # =========================================================
-      - name: Verify V6 source
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "VERIFYING V6 SOURCE"
-          echo "======================================"
-
-          echo ""
-          echo "Checking VERSION V6..."
-
-          if grep -RIn "VERSION V6" lib; then
-            echo ""
-            echo "SUCCESS: VERSION V6 found."
-          else
-            echo ""
-            echo "ERROR: VERSION V6 NOT FOUND!"
-            exit 1
-          fi
-
-
-          echo ""
-          echo "Checking network diagnostic button..."
-
-          if grep -RIn "ՍՏՈՒԳԵԼ ԿԱՊԸ" lib; then
-            echo ""
-            echo "SUCCESS: Network diagnostic button found."
-          else
-            echo ""
-            echo "ERROR: Network diagnostic button NOT FOUND!"
-            exit 1
-          fi
-
-
-          echo ""
-          echo "Checking login screen..."
-
-          if [ ! -f "lib/screens/login_screen.dart" ]; then
-            echo "ERROR: login_screen.dart not found!"
-            exit 1
-          fi
-
-
-          echo ""
-          echo "Checking network diagnostic screen..."
-
-          if [ ! -f "lib/screens/network_diagnostic_screen.dart" ]; then
-            echo "ERROR: network_diagnostic_screen.dart not found!"
-            exit 1
-          fi
-
-
-          echo ""
-          echo "V6 SOURCE VERIFICATION PASSED."
-
-
-      # =========================================================
-      # 7. VERIFY SUPABASE HOSTNAME
-      # =========================================================
-      - name: Verify Supabase configuration
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "SUPABASE CONFIGURATION CHECK"
-          echo "======================================"
-
-          CORRECT_HOST="hvhlrbfjloiahbqmnrly.supabase.co"
-
-          echo ""
-          echo "Searching for correct Supabase hostname..."
-
-          grep -RIn "$CORRECT_HOST" . \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool \
+          grep -nEi \
+            "getDisplayMedia|displayMedia|MediaProjection|screenCapture|screen capture|navigator.mediaDevices" \
+            lib/screens/live_screen.dart \
+            lib/live/live_service.dart \
             || true
 
-          echo ""
-          echo "Checking Supabase URL..."
-
-          if grep -RIn "https://$CORRECT_HOST" lib; then
-            echo ""
-            echo "SUCCESS: Correct Supabase URL found."
-          else
-            echo ""
-            echo "WARNING: Full Supabase URL was not found in lib."
-          fi
-
-
-      # =========================================================
-      # 8. SETUP FLUTTER
-      # =========================================================
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-
-      # =========================================================
-      # 9. GENERATE MODERN ANDROID PROJECT
-      # =========================================================
-      - name: Generate modern Android project
+      - name: Generate Android project
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "GENERATING MODERN ANDROID PROJECT"
+          echo "GENERATING ANDROID PROJECT"
           echo "======================================"
 
           rm -rf android
@@ -247,246 +93,165 @@ jobs:
             --project-name=aimrelax_live \
             .
 
-
-      # =========================================================
-      # 10. CONFIGURE ANDROID
-      # =========================================================
-      - name: Configure Android
+      - name: Configure Android MediaProjection
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "CONFIGURING ANDROID"
+          echo "CONFIGURING ANDROID SCREEN CAPTURE"
           echo "======================================"
 
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-
-          if [ ! -f "$MANIFEST" ]; then
-            echo "ERROR: AndroidManifest.xml not found!"
-            exit 1
-          fi
-
 
           python3 - "$MANIFEST" <<'PY'
           import sys
           from pathlib import Path
 
-          manifest = Path(sys.argv[1])
-          text = manifest.read_text()
+          path = Path(sys.argv[1])
+          text = path.read_text()
 
           permissions = [
-              '<uses-permission android:name="android.permission.INTERNET"/>',
-              '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>',
-              '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
-              '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>',
-              '<uses-permission android:name="android.permission.RECORD_AUDIO"/>',
-              '<uses-permission android:name="android.permission.CAMERA"/>',
-              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>',
-              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>',
-              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>',
-              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
+              'android.permission.INTERNET',
+              'android.permission.ACCESS_NETWORK_STATE',
+              'android.permission.CHANGE_NETWORK_STATE',
+              'android.permission.MODIFY_AUDIO_SETTINGS',
+              'android.permission.RECORD_AUDIO',
+              'android.permission.CAMERA',
+              'android.permission.FOREGROUND_SERVICE',
+              'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
+              'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+              'android.permission.POST_NOTIFICATIONS',
           ]
 
-          missing = [p for p in permissions if p not in text]
+          for permission in permissions:
+              line = f'<uses-permission android:name="{permission}"/>'
 
-          if missing:
-              insertion = "\n".join("    " + p for p in missing)
+              if line not in text:
+                  text = text.replace(
+                      '<application',
+                      f'    {line}\n\n    <application',
+                      1
+                  )
 
-              text = text.replace(
-                  "<application",
-                  insertion + "\n\n    <application",
-                  1
-              )
+          path.write_text(text)
 
-          manifest.write_text(text)
-
-          print("Android permissions configured successfully.")
+          print("MediaProjection permissions configured.")
           PY
 
+          echo ""
+          echo "AndroidManifest permissions:"
+          grep -n "permission" "$MANIFEST"
 
+      - name: Configure minimum SDK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
           GRADLE="android/app/build.gradle.kts"
 
           if [ -f "$GRADLE" ]; then
             sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' "$GRADLE"
-            echo "minSdk configured to 23."
-          else
-            echo "WARNING: build.gradle.kts not found."
           fi
 
+          echo "Minimum Android SDK configured."
 
-          echo ""
-          echo "Android configuration completed."
-
-                - name: Diagnose LIVE screen capture
+      - name: Get Flutter dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          echo "======================================"
-          echo "AIMRELAX LIVE SCREEN CAPTURE DIAGNOSTIC"
-          echo "======================================"
-
-          echo ""
-          echo "LIVE SCREEN:"
-          grep -nEi "getDisplayMedia|displayMedia|screen|capture|MediaProjection|RTCVideoRenderer|flutter_webrtc" \
-            lib/screens/live_screen.dart || true
-
-          echo ""
-          echo "LIVE SERVICE:"
-          grep -nEi "getDisplayMedia|displayMedia|screen|capture|MediaProjection|RTCPeerConnection|MediaStream|flutter_webrtc" \
-            lib/live/live_service.dart || true
-
-          echo ""
-          echo "ALL LIVE REFERENCES:"
-          grep -RInEi "getDisplayMedia|displayMedia|MediaProjection|MediaStream|screen capture|screenCapture" \
-            lib android 2>/dev/null || true
-
-          echo ""
-          echo "PUBSPEC WEBRTC:"
-          grep -n "flutter_webrtc" pubspec.yaml || true
-
-          echo ""
-          echo "DIAGNOSTIC COMPLETE."
-
-
-      # =========================================================
-      # 11. GET DEPENDENCIES
-      # =========================================================
-      - name: Get dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "FLUTTER PUB GET"
-          echo "======================================"
-
           flutter pub get
 
-
-      # =========================================================
-      # 12. VERIFY SOURCE AGAIN BEFORE BUILD
-      # =========================================================
-      - name: Final V6 source verification
+      - name: Verify flutter_webrtc
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "FINAL V6 SOURCE VERIFICATION"
+          echo "VERIFYING FLUTTER WEBRTC"
           echo "======================================"
 
-          echo ""
-          echo "Project directory:"
-          pwd
-
-          echo ""
-          echo "VERSION V6:"
-
-          grep -RIn "VERSION V6" lib
-
-          echo ""
-          echo "NETWORK BUTTON:"
-
-          grep -RIn "ՍՏՈՒԳԵԼ ԿԱՊԸ" lib
-
-          echo ""
-          echo "LOGIN SCREEN:"
-          ls -lh lib/screens/login_screen.dart
-
-          echo ""
-          echo "NETWORK DIAGNOSTIC SCREEN:"
-          ls -lh lib/screens/network_diagnostic_screen.dart
-
-          echo ""
-          echo "FINAL SOURCE CHECK PASSED."
-
-
-      # =========================================================
-      # 13. CLEAN FLUTTER BUILD
-      # =========================================================
-      - name: Clean Flutter build
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "CLEANING FLUTTER BUILD"
-          echo "======================================"
-
-          flutter clean
-
-          rm -rf build
-          rm -rf .dart_tool
-
-          flutter pub get
-
-          echo "Clean build environment ready."
-
-
-      # =========================================================
-      # 14. BUILD APK
-      # =========================================================
-      - name: Build APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "BUILDING AIMRELAX LIVE V6 APK"
-          echo "======================================"
-
-          flutter build apk --release
-
-          echo ""
-          echo "APK BUILD FINISHED."
-
-
-      # =========================================================
-      # 15. VERIFY APK
-      # =========================================================
-      - name: Verify APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "VERIFYING V6 APK"
-          echo "======================================"
-
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not created!"
+          if grep -n "flutter_webrtc" pubspec.yaml; then
+            echo ""
+            echo "flutter_webrtc dependency found."
+          else
+            echo ""
+            echo "ERROR: flutter_webrtc is missing."
             exit 1
           fi
 
           echo ""
-          echo "APK successfully created:"
-          ls -lh "$APK"
+          flutter pub deps | grep flutter_webrtc || true
 
-          echo ""
-          echo "APK path:"
-          realpath "$APK"
-
-          echo ""
-          echo "APK verification completed."
-
-
-      # =========================================================
-      # 16. COPY APK WITH UNIQUE V6 NAME
-      # =========================================================
-      - name: Prepare V6 APK
+      - name: Verify Live implementation
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
-          echo "PREPARING V6 APK"
+          echo "LIVE IMPLEMENTATION CHECK"
           echo "======================================"
 
-          APK="build/app/outputs/flutter-apk/app-release.apk"
+          echo ""
+          echo "Checking live_screen.dart..."
 
-          mkdir -p release
-
-          cp "$APK" "release/AIMRELAX-LIVE-V6.apk"
+          grep -nEi \
+            "getDisplayMedia|displayMedia|MediaProjection|screenCapture|screen capture|navigator.mediaDevices" \
+            lib/screens/live_screen.dart \
+            || true
 
           echo ""
-          echo "Prepared APK:"
-          ls -lh release/AIMRELAX-LIVE-V6.apk
+          echo "Checking live_service.dart..."
 
+          grep -nEi \
+            "getDisplayMedia|displayMedia|MediaProjection|screenCapture|screen capture|navigator.mediaDevices" \
+            lib/live/live_service.dart \
+            || true
 
-      # =========================================================
-      # 17. UPLOAD V6 APK
-      # =========================================================
-      - name: Upload V6 APK
+          echo ""
+          echo "Checking all Dart files..."
+
+          grep -RInEi \
+            "navigator.mediaDevices|getDisplayMedia" \
+            lib \
+            || true
+
+      - name: Clean build
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          flutter clean
+          rm -rf build
+          rm -rf .dart_tool
+          flutter pub get
+
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "======================================"
+          echo "BUILDING AIMRELAX LIVE"
+          echo "======================================"
+
+          flutter build apk --release
+
+      - name: Verify APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: APK was not created."
+            exit 1
+          fi
+
+          echo ""
+          echo "APK CREATED:"
+          ls -lh "$APK"
+
+      - name: Prepare APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          mkdir -p release
+
+          cp \
+            build/app/outputs/flutter-apk/app-release.apk \
+            release/AIMRELAX-LIVE-NATIVE-SCREEN.apk
+
+          ls -lh release/AIMRELAX-LIVE-NATIVE-SCREEN.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIMRELAX-LIVE-Android-V6
-          path: ${{ env.PROJECT_DIR }}/release/AIMRELAX-LIVE-V6.apk
+          name: AIMRELAX-LIVE-Native-Screen
+          path: ${{ env.PROJECT_DIR }}/release/AIMRELAX-LIVE-NATIVE-SCREEN.apk
           if-no-files-found: error
