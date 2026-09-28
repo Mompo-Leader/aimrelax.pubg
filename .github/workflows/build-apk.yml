@@ -23,12 +23,12 @@ jobs:
           echo "Files in repository:"
           ls -lah
 
-          if [ ! -f "./AIMRELAX_LIVE_FIXED_V5.zip" ]; then
-            echo "ERROR: AIMRELAX_LIVE_FIXED_V5.zip not found!"
+          if [ ! -f "./AIMRELAX_LIVE_FIXED_V5_DIAGNOSTIC.zip" ]; then
+            echo "ERROR: AIMRELAX_LIVE_FIXED_V5_DIAGNOSTIC.zip not found!"
             exit 1
           fi
 
-          echo "V5 ZIP found successfully."
+          echo "V5 Diagnostic ZIP found successfully."
 
       # 3. Extract ONLY V5
       - name: Extract V5 project
@@ -36,7 +36,7 @@ jobs:
           rm -rf build_project
           mkdir -p build_project
 
-          unzip -o "./AIMRELAX_LIVE_FIXED_V5.zip" -d build_project
+          unzip -o "./AIMRELAX_LIVE_FIXED_V5_DIAGNOSTIC.zip" -d build_project
 
           echo "Extracted files:"
           find build_project -maxdepth 3 -type f | head -100
