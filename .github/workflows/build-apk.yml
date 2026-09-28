@@ -176,7 +176,7 @@ jobs:
       # =========================
       # 9. Configure Android
       # =========================
-        - name: Configure Android
+      - name: Configure Android
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           echo "======================================"
@@ -233,7 +233,6 @@ jobs:
           fi
 
           echo "Android configuration completed."
-
 
       # =========================
       # 10. Get dependencies
