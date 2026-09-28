@@ -13,33 +13,45 @@ jobs:
 
     steps:
 
-      # 1. Download repository
+      # =========================
+      # 1. Checkout
+      # =========================
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
-      # 2. Check that V5 ZIP exists
-      - name: Check V5 ZIP
+
+      # =========================
+      # 2. Check V6 ZIP
+      # =========================
+      - name: Check V6 ZIP
         run: |
-          echo "Files in repository:"
+          echo "======================================"
+          echo "Checking repository files..."
+          echo "======================================"
+
           ls -lah
 
-          if [ ! -f "./AIMRELAX_LIVE_FIXED_V5_DIAGNOSTIC.zip" ]; then
-            echo "ERROR: AIMRELAX_LIVE_FIXED_V5_DIAGNOSTIC.zip not found!"
+          if [ ! -f "./AIMRELAX_LIVE_FIXED_V6.zip" ]; then
+            echo "ERROR: AIMRELAX_LIVE_FIXED_V6.zip not found!"
             exit 1
           fi
 
-          echo "V5 Diagnostic ZIP found successfully."
+          echo "SUCCESS: V6 ZIP found."
 
-      # 3. Extract ONLY V5
-      - name: Extract V5 project
+
+      # =========================
+      # 3. Extract V6 project
+      # =========================
+      - name: Extract V6 project
         run: |
+          echo "======================================"
+          echo "Extracting V6 project..."
+          echo "======================================"
+
           rm -rf build_project
           mkdir -p build_project
 
-          unzip -o "./AIMRELAX_LIVE_FIXED_V5_DIAGNOSTIC.zip" -d build_project
-
-          echo "Extracted files:"
-          find build_project -maxdepth 3 -type f | head -100
+          unzip -o "./AIMRELAX_LIVE_FIXED_V6.zip" -d build_project
 
           PUBSPEC=$(find build_project -name pubspec.yaml -type f | head -n 1)
 
@@ -55,14 +67,36 @@ jobs:
           echo "Project directory:"
           echo "$PROJECT_DIR"
 
-      # 4. Check Supabase URLs BEFORE Flutter build
+
+      # =========================
+      # 4. Show project files
+      # =========================
+      - name: Inspect V6 project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "======================================"
+          echo "V6 PROJECT FILES"
+          echo "======================================"
+
+          ls -lah
+
+          echo ""
+          echo "Dart files:"
+          find lib -type f -name "*.dart" -print || true
+
+
+      # =========================
+      # 5. Verify Supabase configuration
+      # =========================
       - name: Verify Supabase configuration
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          echo "Checking Supabase configuration..."
+          echo "======================================"
+          echo "SUPABASE CONFIGURATION CHECK"
+          echo "======================================"
 
           echo ""
-          echo "Correct Supabase hostname:"
+          echo "Correct hostname occurrences:"
           grep -RIn "hvhlrbfjloiahbqmnrly.supabase.co" . \
             --exclude-dir=.git \
             --exclude-dir=build \
@@ -70,7 +104,7 @@ jobs:
             || true
 
           echo ""
-          echo "Checking for OLD Supabase hostname..."
+          echo "Checking for OLD incorrect hostname..."
 
           if grep -RIn "hvhirbfjloiahbqmnrly.supabase.co" . \
             --exclude-dir=.git \
@@ -78,25 +112,58 @@ jobs:
             --exclude-dir=.dart_tool; then
 
             echo ""
-            echo "ERROR: OLD Supabase hostname FOUND!"
-            echo "Build stopped intentionally."
+            echo "ERROR: OLD SUPABASE HOSTNAME FOUND!"
             exit 1
           fi
 
           echo ""
-          echo "SUCCESS: OLD Supabase hostname was NOT found."
+          echo "SUCCESS: OLD hostname was NOT found."
 
-      # 5. Setup Flutter
+
+      # =========================
+      # 6. Check V6 marker
+      # =========================
+      - name: Verify V6 marker
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          echo "======================================"
+          echo "CHECKING V6 VERSION MARKER"
+          echo "======================================"
+
+          if grep -RIn "VERSION V6" lib . \
+            --exclude-dir=.git \
+            --exclude-dir=build \
+            --exclude-dir=.dart_tool; then
+
+            echo ""
+            echo "SUCCESS: VERSION V6 marker found."
+          else
+            echo ""
+            echo "WARNING: VERSION V6 marker was not found."
+            echo "Continuing build..."
+          fi
+
+
+      # =========================
+      # 7. Setup Flutter
+      # =========================
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      # 6. Generate modern Android project
+
+      # =========================
+      # 8. Generate modern Android project
+      # =========================
       - name: Generate modern Android project
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
+          echo "======================================"
+          echo "Generating Android project..."
+          echo "======================================"
+
           rm -rf android
 
           flutter create \
@@ -105,10 +172,18 @@ jobs:
             --project-name=aimrelax_live \
             .
 
-      # 7. Configure Android
+
+      # =========================
+      # 9. Configure Android
+      # =========================
       - name: Configure Android
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
+
+          echo "======================================"
+          echo "Configuring Android..."
+          echo "======================================"
+
           python3 - <<'PY'
           from pathlib import Path
 
@@ -116,23 +191,36 @@ jobs:
 
           s = p.read_text()
 
-          if '<uses-permission android:name="android.permission.INTERNET"/>' in s:
+          permissions = [
+              '<uses-permission android:name="android.permission.INTERNET"/>',
+              '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>',
+              '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
+              '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>',
+              '<uses-permission android:name="android.permission.RECORD_AUDIO"/>',
+              '<uses-permission android:name="android.permission.CAMERA"/>',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>',
+              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>',
+              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>'
+          ]
+
+          if '<manifest' in s:
+              insert = "\n".join(
+                  p for p in permissions
+                  if p not in s
+              )
+
               s = s.replace(
-                  '<uses-permission android:name="android.permission.INTERNET"/>',
-                  '''<uses-permission android:name="android.permission.INTERNET"/>
-          <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-          <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
-          <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
-          <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-          <uses-permission android:name="android.permission.CAMERA"/>
-          <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-          <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
-          <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
-          <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>'''
+                  '<application',
+                  insert + '\n\n    <application',
+                  1
               )
 
           p.write_text(s)
+
+          print("Android permissions configured.")
           PY
+
 
           python3 - <<'PY'
           from pathlib import Path
@@ -148,71 +236,5 @@ jobs:
               )
 
               p.write_text(s)
-          PY
 
-      # 8. Get Flutter dependencies
-      - name: Get dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          flutter pub get
-
-      # 9. FINAL SOURCE CHECK
-      # This check happens immediately before APK build.
-      - name: Final Supabase URL check
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "========== FINAL SUPABASE CHECK =========="
-
-          echo ""
-          echo "Correct hostname occurrences:"
-          grep -RIn "hvhlrbfjloiahbqmnrly.supabase.co" . \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool \
-            || true
-
-          echo ""
-          echo "Old hostname occurrences:"
-
-          if grep -RIn "hvhirbfjloiahbqmnrly.supabase.co" . \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool; then
-
-            echo ""
-            echo "ERROR: OLD HOSTNAME FOUND BEFORE BUILD!"
-            exit 1
-          fi
-
-          echo ""
-          echo "FINAL CHECK PASSED."
-          echo "No old hvhir hostname exists in the source."
-
-      # 10. Build APK
-      - name: Build APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          flutter build apk --release
-
-      # 11. Verify APK exists
-      - name: Verify APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not created!"
-            exit 1
-          fi
-
-          echo ""
-          echo "APK successfully created:"
-          ls -lh "$APK"
-
-      # 12. Upload APK
-      - name: Upload APK
-        uses: actions/upload-artifact@v5
-        with:
-          name: AIMRELAX-LIVE-Android-V5
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
+              print("minSdk configured to 
