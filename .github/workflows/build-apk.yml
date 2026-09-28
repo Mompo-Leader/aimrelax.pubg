@@ -15,7 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare Flutter project
+      - name: Extract project
         run: |
           mkdir -p build_project
 
@@ -32,16 +32,12 @@ jobs:
 
           if [ -z "$PUBSPEC" ]; then
             echo "pubspec.yaml not found"
-            find build_project -maxdepth 3 -type f
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$PUBSPEC")
 
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-
-          echo "Flutter project found at:"
-          echo "$PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -49,9 +45,66 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Flutter pub get
+      - name: Generate modern Android project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          rm -rf android
+          flutter create \
+            --platforms=android \
+            --org=com.aimrelax \
+            --project-name=aimrelax_live \
+            .
+
+      - name: Configure Android
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("android/app/src/main/AndroidManifest.xml")
+
+          s = p.read_text()
+
+          s = s.replace(
+              '<uses-permission android:name="android.permission.INTERNET"/>',
+              '''<uses-permission android:name="android.permission.INTERNET"/>
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+              <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+              <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+              <uses-permission android:name="android.permission.CAMERA"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>'''
+          )
+
+          p.write_text(s)
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("android/app/build.gradle.kts")
+          if p.exists():
+              s = p.read_text()
+
+              if "minSdk = 23" not in s:
+                  s = s.replace(
+                      "minSdk = flutter.minSdkVersion",
+                      "minSdk = 23"
+                  )
+
+              p.write_text(s)
+          PY
+
+      - name: Get dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
+
+      - name: Analyze
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: flutter analyze
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
