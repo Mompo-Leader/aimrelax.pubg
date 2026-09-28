@@ -1,4 +1,4 @@
-name: Build AIMRELAX LIVE APK
+name: Build AIMRELAX LIVE V6 APK
 
 on:
   workflow_dispatch:
@@ -7,416 +7,128 @@ on:
       - main
       - master
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  build-apk:
+    name: Build AIMRELAX LIVE V6
     runs-on: ubuntu-latest
 
-    steps:
+    defaults:
+      run:
+        working-directory: AIMRELAX_LIVE
 
-      # =========================
-      # 1. Checkout
-      # =========================
-      - name: Checkout
+    steps:
+      # --------------------------------------------------
+      # 1. Download repository
+      # --------------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-
-      # =========================
-      # 2. Check V6 ZIP
-      # =========================
-      - name: Check V6 ZIP
-        run: |
-          echo "======================================"
-          echo "Checking repository files..."
-          echo "======================================"
-
-          ls -lah
-
-          if [ ! -f "./AIMRELAX_LIVE_FIXED_V6.zip" ]; then
-            echo "ERROR: AIMRELAX_LIVE_FIXED_V6.zip not found!"
-            exit 1
-          fi
-
-          echo ""
-          echo "SUCCESS: V6 ZIP found."
-          ls -lh "./AIMRELAX_LIVE_FIXED_V6.zip"
-
-
-      # =========================
-      # 3. Extract V6 project
-      # =========================
-      - name: Extract V6 project
-        run: |
-          echo "======================================"
-          echo "Extracting V6 project..."
-          echo "======================================"
-
-          rm -rf build_project
-          mkdir -p build_project
-
-          unzip -o "./AIMRELAX_LIVE_FIXED_V6.zip" -d build_project
-
-          echo ""
-          echo "Searching for pubspec.yaml..."
-
-          PUBSPEC=$(find build_project -name pubspec.yaml -type f | head -n 1)
-
-          if [ -z "$PUBSPEC" ]; then
-            echo "ERROR: pubspec.yaml not found!"
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$PUBSPEC")
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-          echo ""
-          echo "Project directory:"
-          echo "$PROJECT_DIR"
-
-
-      # =========================
-      # 4. Show project files
-      # =========================
-      - name: Inspect V6 project
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "V6 PROJECT FILES"
-          echo "======================================"
-
-          echo ""
-          echo "Project root:"
-          pwd
-
-          echo ""
-          echo "Project files:"
-          ls -lah
-
-          echo ""
-          echo "Dart files:"
-          find lib -type f -name "*.dart" -print || true
-
-
-      # =========================
-      # 5. Verify Supabase configuration
-      # =========================
-      - name: Verify Supabase configuration
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "SUPABASE CONFIGURATION CHECK"
-          echo "======================================"
-
-          echo ""
-          echo "Correct hostname occurrences:"
-
-          grep -RIn "hvhlrbfjloiahbqmnrly.supabase.co" . \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool \
-            || true
-
-          echo ""
-          echo "Checking for OLD incorrect hostname..."
-
-          if grep -RIn "hvhirbfloiahbqmnrly.supabase.co" . \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool; then
-
-            echo ""
-            echo "ERROR: OLD SUPABASE HOSTNAME FOUND!"
-            exit 1
-          fi
-
-          echo ""
-          echo "SUCCESS: OLD hostname was NOT found."
-
-
-      # =========================
-      # 6. Verify V6 source
-      # =========================
-      - name: Verify V6 source
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "VERIFYING V6 SOURCE"
-          echo "======================================"
-
-          echo ""
-          echo "Checking VERSION V6..."
-
-          if ! grep -RIn "VERSION V6" lib \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool; then
-
-            echo ""
-            echo "ERROR: VERSION V6 NOT FOUND!"
-            echo "The extracted project is NOT V6."
-            exit 1
-          fi
-
-          echo ""
-          echo "Checking network diagnostic button..."
-
-          if ! grep -RIn "ՍՏՈՒԳԵԼ ԿԱՊԸ" lib \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool; then
-
-            echo ""
-            echo "ERROR: NETWORK DIAGNOSTIC BUTTON NOT FOUND!"
-            echo "The extracted project is NOT the expected V6."
-            exit 1
-          fi
-
-          echo ""
-          echo "SUCCESS: V6 SOURCE VERIFIED."
-
-
-      # =========================
-      # 7. Verify important V6 files
-      # =========================
-      - name: Verify V6 files
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "VERIFYING V6 FILES"
-          echo "======================================"
-
-          REQUIRED_FILES=(
-            "lib/main.dart"
-            "lib/screens/login_screen.dart"
-            "lib/screens/network_diagnostic_screen.dart"
-            "pubspec.yaml"
-          )
-
-          for FILE in "${REQUIRED_FILES[@]}"; do
-
-            if [ ! -f "$FILE" ]; then
-              echo "ERROR: Missing file: $FILE"
-              exit 1
-            fi
-
-            echo "OK: $FILE"
-
-          done
-
-          echo ""
-          echo "SUCCESS: All required V6 files exist."
-
-
-      # =========================
-      # 8. Setup Flutter
-      # =========================
+      # --------------------------------------------------
+      # 2. Install Flutter
+      # --------------------------------------------------
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-
-      # =========================
-      # 9. Generate modern Android project
-      # =========================
-      - name: Generate modern Android project
-        working-directory: ${{ env.PROJECT_DIR }}
+      # --------------------------------------------------
+      # 3. Check project structure
+      # --------------------------------------------------
+      - name: Verify V6 project
         run: |
-          echo "======================================"
-          echo "Generating Android project..."
-          echo "======================================"
+          echo "Checking AIMRELAX LIVE V6 project..."
+          pwd
 
-          rm -rf android
-
-          flutter create \
-            --platforms=android \
-            --org=com.aimrelax \
-            --project-name=aimrelax_live \
-            .
-
-          echo ""
-          echo "Flutter Android project generated."
-
-
-      # =========================
-      # 10. Configure Android
-      # =========================
-      - name: Configure Android
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "Configuring Android..."
-          echo "======================================"
-
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
-
-          if [ ! -f "$MANIFEST" ]; then
-            echo "ERROR: AndroidManifest.xml not found!"
+          if [ ! -f "pubspec.yaml" ]; then
+            echo "ERROR: pubspec.yaml not found in AIMRELAX_LIVE/"
             exit 1
           fi
 
-          python3 - "$MANIFEST" <<'PY'
-          import sys
-          from pathlib import Path
-
-          manifest = Path(sys.argv[1])
-          text = manifest.read_text()
-
-          permissions = [
-              '<uses-permission android:name="android.permission.INTERNET"/>',
-              '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>',
-              '<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE"/>',
-              '<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>',
-              '<uses-permission android:name="android.permission.RECORD_AUDIO"/>',
-              '<uses-permission android:name="android.permission.CAMERA"/>',
-              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>',
-              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>',
-              '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>',
-              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
-          ]
-
-          missing = [p for p in permissions if p not in text]
-
-          if missing:
-              insertion = "\n".join("    " + p for p in missing)
-              text = text.replace(
-                  "<application",
-                  insertion + "\n\n    <application",
-                  1
-              )
-
-          manifest.write_text(text)
-
-          print("Android permissions configured successfully.")
-          PY
-
-          echo ""
-          echo "Checking Android Gradle configuration..."
-
-          GRADLE="android/app/build.gradle.kts"
-
-          if [ -f "$GRADLE" ]; then
-
-            sed -i \
-              's/minSdk = flutter.minSdkVersion/minSdk = 23/g' \
-              "$GRADLE"
-
-            echo "minSdk configured to 23."
-
-          else
-
-            echo "WARNING: build.gradle.kts not found."
-
-          fi
-
-          echo ""
-          echo "Android configuration completed."
-
-
-      # =========================
-      # 11. Get dependencies
-      # =========================
-      - name: Get dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "Flutter pub get..."
-          echo "======================================"
-
-          flutter pub get
-
-
-      # =========================
-      # 12. Final V6 source check
-      # =========================
-      - name: Final V6 source check
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "FINAL V6 SOURCE CHECK"
-          echo "======================================"
-
-          echo ""
-          echo "Checking VERSION V6..."
-
-          grep -RIn "VERSION V6" lib \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool
-
-          echo ""
-          echo "Checking diagnostic button..."
-
-          grep -RIn "ՍՏՈՒԳԵԼ ԿԱՊԸ" lib \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool
-
-          echo ""
-          echo "Checking correct Supabase URL..."
-
-          grep -RIn "https://hvhlrbfjloiahbqmnrly.supabase.co" lib \
-            --exclude-dir=.git \
-            --exclude-dir=build \
-            --exclude-dir=.dart_tool \
-            || true
-
-          echo ""
-          echo "FINAL V6 SOURCE CHECK PASSED."
-
-
-      # =========================
-      # 13. Build APK
-      # =========================
-      - name: Build APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "BUILDING AIMRELAX LIVE V6"
-          echo "======================================"
-
-          flutter build apk --release
-
-          echo ""
-          echo "APK BUILD FINISHED."
-
-
-      # =========================
-      # 14. Verify APK
-      # =========================
-      - name: Verify APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo "VERIFYING V6 APK"
-          echo "======================================"
-
-          APK="build/app/outputs/flutter-apk/app-release.apk"
-
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: APK was not created!"
+          if [ ! -f "lib/main.dart" ]; then
+            echo "ERROR: lib/main.dart not found."
             exit 1
           fi
 
-          echo ""
-          echo "APK successfully created:"
-          ls -lh "$APK"
+          if [ ! -d "android" ]; then
+            echo "ERROR: android directory not found."
+            exit 1
+          fi
 
-          echo ""
-          echo "APK path:"
-          realpath "$APK"
+          echo "V6 Flutter project detected successfully."
 
-          echo ""
-          echo "APK verification completed."
+      # --------------------------------------------------
+      # 4. Show Flutter/Dart versions
+      # --------------------------------------------------
+      - name: Flutter version
+        run: |
+          flutter --version
+          dart --version
 
+      # --------------------------------------------------
+      # 5. Get dependencies
+      # --------------------------------------------------
+      - name: Flutter pub get
+        run: flutter pub get
 
-      # =========================
-      # 15. Upload V6 APK
-      # =========================
-      - name: Upload V6 APK
+      # --------------------------------------------------
+      # 6. Analyze project
+      # --------------------------------------------------
+      - name: Flutter analyze
+        run: flutter analyze --no-fatal-infos
+
+      # --------------------------------------------------
+      # 7. Clean old build files
+      # --------------------------------------------------
+      - name: Flutter clean
+        run: flutter clean
+
+      # --------------------------------------------------
+      # 8. Get dependencies again after clean
+      # --------------------------------------------------
+      - name: Flutter pub get after clean
+        run: flutter pub get
+
+      # --------------------------------------------------
+      # 9. Build release APK
+      # --------------------------------------------------
+      - name: Build release APK
+        run: flutter build apk --release
+
+      # --------------------------------------------------
+      # 10. Verify APK
+      # --------------------------------------------------
+      - name: Verify generated APK
+        run: |
+          echo "Generated APK files:"
+          find build/app/outputs/flutter-apk \
+            -type f \
+            -name "*.apk" \
+            -print
+
+          if [ ! -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            echo "ERROR: Release APK was not generated."
+            exit 1
+          fi
+
+      # --------------------------------------------------
+      # 11. Rename APK
+      # --------------------------------------------------
+      - name: Rename APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/AIMRELAX-LIVE-V6.apk
+
+      # --------------------------------------------------
+      # 12. Upload APK to GitHub Actions
+      # --------------------------------------------------
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AIMRELAX-LIVE-Android-V6
-          path: ${{ env.PROJECT_DIR }}/build/app/outputs/flutter-apk/app-release.apk
+          name: AIMRELAX-LIVE-V6
+          path: AIMRELAX_LIVE/build/app/outputs/flutter-apk/AIMRELAX-LIVE-V6.apk
           if-no-files-found: error
+          retention-days: 30
