@@ -176,20 +176,26 @@ jobs:
       # =========================
       # 9. Configure Android
       # =========================
-      - name: Configure Android
+        - name: Configure Android
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-
           echo "======================================"
           echo "Configuring Android..."
           echo "======================================"
 
-          python3 - <<'PY'
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          if [ ! -f "$MANIFEST" ]; then
+            echo "ERROR: AndroidManifest.xml not found!"
+            exit 1
+          fi
+
+          python3 - "$MANIFEST" <<'PY'
+          import sys
           from pathlib import Path
 
-          p = Path("android/app/src/main/AndroidManifest.xml")
-
-          s = p.read_text()
+          manifest = Path(sys.argv[1])
+          text = manifest.read_text()
 
           permissions = [
               '<uses-permission android:name="android.permission.INTERNET"/>',
@@ -201,46 +207,32 @@ jobs:
               '<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>',
               '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>',
               '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>',
-              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>'
+              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
           ]
 
-          if '<manifest' in s:
-              insert = "\n".join(
-                  p for p in permissions
-                  if p not in s
-              )
+          missing = [p for p in permissions if p not in text]
 
-              s = s.replace(
-                  '<application',
-                  insert + '\n\n    <application',
-                  1
-              )
+          if missing:
+              insertion = "\n".join("    " + p for p in missing)
+              text = text.replace("<application", insertion + "\n\n    <application", 1)
 
-          p.write_text(s)
+          manifest.write_text(text)
 
-          print("Android permissions configured.")
+          print("Android permissions configured successfully.")
           PY
 
+          echo "Checking Android Gradle configuration..."
 
-          python3 - <<'PY'
-          from pathlib import Path
+          GRADLE="android/app/build.gradle.kts"
 
-          p = Path("android/app/build.gradle.kts")
+          if [ -f "$GRADLE" ]; then
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' "$GRADLE"
+            echo "minSdk configured to 23."
+          else
+            echo "WARNING: build.gradle.kts not found."
+          fi
 
-          if p.exists():
-              s = p.read_text()
-
-              s = s.replace(
-                  "minSdk = flutter.minSdkVersion",
-                  "minSdk = 23"
-              )
-
-              p.write_text(s)
-
-              print("minSdk configured to 23.")
-          else:
-              print("build.gradle.kts not found.")
-          PY
+          echo "Android configuration completed."
 
 
       # =========================
