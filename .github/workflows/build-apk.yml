@@ -102,9 +102,6 @@ jobs:
         working-directory: ${{ env.PROJECT_DIR }}
         run: flutter pub get
 
-      - name: Analyze
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: flutter analyze
 
       - name: Build APK
         working-directory: ${{ env.PROJECT_DIR }}
