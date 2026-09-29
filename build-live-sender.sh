@@ -488,7 +488,7 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
 
-            JSONObject(payload).optString("sub", null)
+            JSONObject(payload).optString("sub", "")
 
         } catch (e: Exception) {
 
