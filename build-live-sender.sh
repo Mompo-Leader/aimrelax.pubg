@@ -212,6 +212,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
+import kotlinx.coroutines.cancel
 
 class MainActivity : AppCompatActivity() {
 
