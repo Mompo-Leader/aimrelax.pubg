@@ -914,10 +914,31 @@ echo "======================================"
 gradle :app:assembleRelease --no-daemon --stacktrace
 
 echo "======================================"
+echo "======================================"
 echo "BUILD SUCCESS"
 echo "======================================"
 
-ls -lh app/build/outputs/apk/release/app-release.apk
+echo "Searching for generated APK..."
 
-echo "APK:"
-echo "live-sender/app/build/outputs/apk/release/app-release.apk"
+APK_PATH=$(find app/build/outputs/apk -type f -name "*.apk" | head -n 1)
+
+if [ -z "$APK_PATH" ]; then
+    echo "ERROR: APK was not found."
+    echo "Searching all build directories..."
+    find app/build -type f -name "*.apk" -print
+    exit 1
+fi
+
+echo "APK FOUND:"
+echo "$APK_PATH"
+
+ls -lh "$APK_PATH"
+
+mkdir -p app/build/outputs/apk/release
+
+if [ "$APK_PATH" != "app/build/outputs/apk/release/app-release.apk" ]; then
+    cp "$APK_PATH" app/build/outputs/apk/release/app-release.apk
+fi
+
+echo "FINAL APK:"
+ls -lh app/build/outputs/apk/release/app-release.apk
