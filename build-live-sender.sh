@@ -360,15 +360,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onNewIntent(
-        intent: Intent?
-    ) {
+    intent: Intent
+) 
+ {
 
-        super.onNewIntent(intent)
+    super.onNewIntent(intent)
 
-        setIntent(intent)
+    setIntent(intent)
 
-        handleOAuthIntent(intent)
-    }
+    handleOAuthIntent(intent)
+}
 
     private fun createInterface() {
 
