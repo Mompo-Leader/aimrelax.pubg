@@ -891,25 +891,19 @@ class MainActivity : AppCompatActivity() {
             statusText.text = message
         }
     }
+override fun onDestroy() {
 
-    override fun onDestroy() {
-
-        try {
-
-            room?.localParticipant
-                ?.setScreenShareEnabled(false)
-
-            room?.disconnect()
-
-            room = null
-
-        } catch (_: Exception) {
-        }
-
-        scope.cancel()
-
-        super.onDestroy()
+    try {
+        room?.disconnect()
+    } catch (_: Exception) {
     }
+
+    room = null
+
+    scope.cancel()
+
+    super.onDestroy()
+}
 }
 EOF
 
