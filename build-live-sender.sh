@@ -583,8 +583,7 @@ class MainActivity : AppCompatActivity() {
         webView.settings.domStorageEnabled =
             true
 
-        webView.settings.databaseEnabled =
-            true
+        
 
         webView.webViewClient =
             object : WebViewClient() {
