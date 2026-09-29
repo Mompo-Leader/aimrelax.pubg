@@ -26,6 +26,7 @@ pluginManagement {
 
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+
     repositories {
         google()
         mavenCentral()
@@ -67,16 +68,18 @@ android {
         applicationId 'com.aimrelax.livesender'
         minSdk 23
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '1.1'
     }
 
     buildTypes {
         release {
             minifyEnabled false
             shrinkResources false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
-                    'proguard-rules.pro'
+
+            proguardFiles getDefaultProguardFile(
+                'proguard-android-optimize.txt'
+            ), 'proguard-rules.pro'
         }
     }
 
@@ -91,6 +94,7 @@ android {
 }
 
 dependencies {
+
     implementation 'io.livekit:livekit-android:2.28.2'
 
     implementation 'androidx.core:core-ktx:1.15.0'
@@ -118,6 +122,7 @@ cat > app/src/main/res/values/colors.xml <<'EOF'
     <color name="black">#070707</color>
     <color name="orange">#ff7a00</color>
     <color name="white">#ffffff</color>
+    <color name="google_blue">#4285F4</color>
 </resources>
 EOF
 
@@ -125,12 +130,16 @@ cat > app/src/main/res/values/themes.xml <<'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.AIMRELAX" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style
+        name="Theme.AIMRELAX"
+        parent="Theme.AppCompat.DayNight.NoActionBar">
+
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:statusBarColor">@color/black</item>
         <item name="android:navigationBarColor">@color/black</item>
         <item name="android:colorAccent">@color/orange</item>
+
     </style>
 
 </resources>
@@ -139,18 +148,27 @@ EOF
 cat > app/src/main/res/xml/network_security_config.xml <<'EOF'
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+
     <base-config cleartextTrafficPermitted="false" />
+
 </network-security-config>
 EOF
 
 cat > app/src/main/AndroidManifest.xml <<'EOF'
 <?xml version="1.0" encoding="utf-8"?>
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="false"
@@ -166,8 +184,30 @@ cat > app/src/main/AndroidManifest.xml <<'EOF'
             android:screenOrientation="portrait">
 
             <intent-filter>
+
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+
+                <category
+                    android:name="android.intent.category.LAUNCHER" />
+
+            </intent-filter>
+
+            <!-- Google OAuth callback -->
+            <intent-filter>
+
+                <action
+                    android:name="android.intent.action.VIEW" />
+
+                <category
+                    android:name="android.intent.category.DEFAULT" />
+
+                <category
+                    android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:scheme="aimrelax"
+                    android:host="auth-callback" />
+
             </intent-filter>
 
         </activity>
@@ -188,6 +228,7 @@ package com.aimrelax.livesender
 import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -197,27 +238,37 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.setPadding
+
 import io.livekit.android.LiveKit
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.screencapture.ScreenCaptureParams
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 import org.json.JSONObject
+
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.util.Base64
-import kotlinx.coroutines.cancel
 
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val SITE_URL = "https://aimrelax-pubg.github.io/"
+
+        private const val SITE_URL =
+            "https://aimrelax-pubg.github.io/"
+
         private const val SUPABASE_URL =
             "https://hvhlrbfjloiahbqmnrly.supabase.co"
 
@@ -229,19 +280,42 @@ class MainActivity : AppCompatActivity() {
 
         private const val SUPABASE_KEY =
             "sb_publishable_EcZUkLdUCvV3qWDD7jlvhg_OjTYu1jA"
+
+        private const val GOOGLE_REDIRECT =
+            "aimrelax://auth-callback"
+
+        private const val GOOGLE_AUTH_URL =
+            "$SUPABASE_URL/auth/v1/authorize"
+
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope =
+        CoroutineScope(
+            SupervisorJob() + Dispatchers.Main
+        )
 
     private lateinit var webView: WebView
+
     private lateinit var startButton: Button
+
     private lateinit var stopButton: Button
+
+    private lateinit var googleButton: Button
+
+    private lateinit var logoutButton: Button
+
     private lateinit var statusText: TextView
 
     private var room: Room? = null
+
     private var accessToken: String? = null
+
+    private var refreshToken: String? = null
+
     private var userId: String? = null
+
     private var roomName: String? = null
+
     private var isLive = false
 
     private val screenCaptureLauncher =
@@ -249,43 +323,100 @@ class MainActivity : AppCompatActivity() {
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
 
-            if (result.resultCode != Activity.RESULT_OK ||
+            if (
+                result.resultCode != Activity.RESULT_OK ||
                 result.data == null
             ) {
-                setStatus("Screen sharing permission cancelled")
+
+                setStatus(
+                    "Screen sharing permission cancelled"
+                )
+
+                startButton.isEnabled =
+                    accessToken != null
+
                 return@registerForActivityResult
             }
 
-            val permissionData = result.data!!
+            val permissionData =
+                result.data!!
 
             scope.launch {
                 startLiveKit(permissionData)
             }
         }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(
+        savedInstanceState: Bundle?
+    ) {
+
         super.onCreate(savedInstanceState)
 
         createInterface()
+
         setupWebView()
+
+        handleOAuthIntent(intent)
+    }
+
+    override fun onNewIntent(
+        intent: Intent?
+    ) {
+
+        super.onNewIntent(intent)
+
+        setIntent(intent)
+
+        handleOAuthIntent(intent)
     }
 
     private fun createInterface() {
 
-        val root = LinearLayout(this)
+        val root =
+            LinearLayout(this)
 
-        root.orientation = LinearLayout.VERTICAL
-        root.gravity = Gravity.CENTER_HORIZONTAL
+        root.orientation =
+            LinearLayout.VERTICAL
+
+        root.gravity =
+            Gravity.CENTER_HORIZONTAL
+
         root.setPadding(40)
-        root.setBackgroundColor(android.graphics.Color.rgb(7, 7, 7))
 
-        val title = TextView(this)
+        root.setBackgroundColor(
+            android.graphics.Color.rgb(
+                7,
+                7,
+                7
+            )
+        )
 
-        title.text = "AIMRELAX LIVE"
-        title.textSize = 30f
-        title.setTextColor(android.graphics.Color.rgb(255, 122, 0))
-        title.gravity = Gravity.CENTER
-        title.setPadding(0, 30, 0, 20)
+        val title =
+            TextView(this)
+
+        title.text =
+            "AIMRELAX LIVE"
+
+        title.textSize =
+            30f
+
+        title.setTextColor(
+            android.graphics.Color.rgb(
+                255,
+                122,
+                0
+            )
+        )
+
+        title.gravity =
+            Gravity.CENTER
+
+        title.setPadding(
+            0,
+            30,
+            0,
+            20
+        )
 
         root.addView(
             title,
@@ -295,13 +426,28 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        statusText = TextView(this)
+        statusText =
+            TextView(this)
 
-        statusText.text = "Checking AIMRELAX login..."
-        statusText.textSize = 16f
-        statusText.setTextColor(android.graphics.Color.WHITE)
-        statusText.gravity = Gravity.CENTER
-        statusText.setPadding(0, 20, 0, 40)
+        statusText.text =
+            "Մուտք գործեք AIMRELAX"
+
+        statusText.textSize =
+            16f
+
+        statusText.setTextColor(
+            android.graphics.Color.WHITE
+        )
+
+        statusText.gravity =
+            Gravity.CENTER
+
+        statusText.setPadding(
+            0,
+            20,
+            0,
+            25
+        )
 
         root.addView(
             statusText,
@@ -311,29 +457,67 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        startButton = Button(this)
+        googleButton =
+            Button(this)
 
-        startButton.text = "START LIVE"
-        startButton.isEnabled = false
+        googleButton.text =
+            "🔵  ՄՈՒՏՔ GOOGLE-ՈՎ"
 
-        startButton.setOnClickListener {
-            prepareLive()
+        googleButton.textSize =
+            16f
+
+        googleButton.setOnClickListener {
+
+            startGoogleLogin()
         }
 
         root.addView(
-            startButton,
+            googleButton,
             LinearLayout.LayoutParams(
                 -1,
                 65
             )
         )
 
-        stopButton = Button(this)
+        startButton =
+            Button(this)
 
-        stopButton.text = "STOP LIVE"
-        stopButton.isEnabled = false
+        startButton.text =
+            "START LIVE"
+
+        startButton.isEnabled =
+            false
+
+        startButton.setOnClickListener {
+
+            prepareLive()
+        }
+
+        val startParams =
+            LinearLayout.LayoutParams(
+                -1,
+                65
+            )
+
+        startParams.topMargin =
+            25
+
+        root.addView(
+            startButton,
+            startParams
+        )
+
+        stopButton =
+            Button(this)
+
+        stopButton.text =
+            "STOP LIVE"
+
+        stopButton.isEnabled =
+            false
 
         stopButton.setOnClickListener {
+
             stopLive()
         }
 
@@ -345,9 +529,39 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        webView = WebView(this)
+        logoutButton =
+            Button(this)
 
-        webView.visibility = View.GONE
+        logoutButton.text =
+            "ԴՈՒՐՍ ԳԱԼ"
+
+        logoutButton.visibility =
+            View.GONE
+
+        logoutButton.setOnClickListener {
+
+            logout()
+        }
+
+        val logoutParams =
+            LinearLayout.LayoutParams(
+                -1,
+                60
+            )
+
+        logoutParams.topMargin =
+            15
+
+        root.addView(
+            logoutButton,
+            logoutParams
+        )
+
+        webView =
+            WebView(this)
+
+        webView.visibility =
+            View.GONE
 
         root.addView(
             webView,
@@ -362,94 +576,465 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupWebView() {
 
-        webView.settings.javaScriptEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.databaseEnabled = true
+        webView.settings.javaScriptEnabled =
+            true
 
-        webView.webViewClient = object : WebViewClient() {
+        webView.settings.domStorageEnabled =
+            true
 
-            override fun onPageFinished(
-                view: WebView?,
-                url: String?
-            ) {
-                super.onPageFinished(view, url)
+        webView.settings.databaseEnabled =
+            true
 
-                scope.launch {
-                    kotlinx.coroutines.delay(3000)
-                    checkLogin()
+        webView.webViewClient =
+            object : WebViewClient() {
+
+                override fun onPageFinished(
+                    view: WebView?,
+                    url: String?
+                ) {
+
+                    super.onPageFinished(
+                        view,
+                        url
+                    )
+
+                    scope.launch {
+
+                        delay(1500)
+
+                        checkLogin()
+                    }
                 }
             }
-        }
 
         webView.loadUrl(SITE_URL)
     }
 
+    private fun startGoogleLogin() {
+
+        try {
+
+            val redirect =
+                URLEncoder.encode(
+                    GOOGLE_REDIRECT,
+                    "UTF-8"
+                )
+
+            val apiKey =
+                URLEncoder.encode(
+                    SUPABASE_KEY,
+                    "UTF-8"
+                )
+
+            val oauthUrl =
+                "$GOOGLE_AUTH_URL" +
+                "?provider=google" +
+                "&redirect_to=$redirect" +
+                "&apikey=$apiKey"
+
+            val intent =
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse(oauthUrl)
+                )
+
+            startActivity(intent)
+
+            setStatus(
+                "Google-ի մուտքի էջը բացվեց..."
+            )
+
+        } catch (e: Exception) {
+
+            setStatus(
+                "Google login error:\n" +
+                (e.message ?: "Unknown error")
+            )
+        }
+    }
+
+    private fun handleOAuthIntent(
+        intent: Intent?
+    ) {
+
+        if (intent == null) {
+            return
+        }
+
+        val data =
+            intent.data
+
+        if (data == null) {
+            return
+        }
+
+        if (
+            data.scheme != "aimrelax" ||
+            data.host != "auth-callback"
+        ) {
+            return
+        }
+
+        val fragment =
+            data.fragment
+
+        if (fragment.isNullOrBlank()) {
+
+            setStatus(
+                "Google login failed."
+            )
+
+            return
+        }
+
+        val params =
+            parseFragment(fragment)
+
+        val error =
+            params["error_description"]
+                ?: params["error"]
+
+        if (!error.isNullOrBlank()) {
+
+            setStatus(
+                "Google login error:\n$error"
+            )
+
+            return
+        }
+
+        val token =
+            params["access_token"]
+
+        val refresh =
+            params["refresh_token"]
+
+        if (
+            token.isNullOrBlank()
+        ) {
+
+            setStatus(
+                "Google login failed:\n" +
+                "Access token not received."
+            )
+
+            return
+        }
+
+        accessToken =
+            token
+
+        refreshToken =
+            refresh
+
+        userId =
+            getUserIdFromJwt(token)
+
+        if (userId.isNullOrBlank()) {
+
+            accessToken =
+                null
+
+            setStatus(
+                "Google login succeeded,\n" +
+                "but user account could not be read."
+            )
+
+            return
+        }
+
+        setStatus(
+            "✅ Google մուտքը հաջողվեց"
+        )
+
+        googleButton.visibility =
+            View.GONE
+
+        logoutButton.visibility =
+            View.VISIBLE
+
+        startButton.isEnabled =
+            true
+
+        syncWebViewSession(
+            token,
+            refresh
+        )
+    }
+
+    private fun parseFragment(
+        fragment: String
+    ): Map<String, String> {
+
+        val result =
+            mutableMapOf<String, String>()
+
+        fragment
+            .split("&")
+            .forEach { item ->
+
+                val index =
+                    item.indexOf("=")
+
+                if (index <= 0) {
+                    return@forEach
+                }
+
+                val key =
+                    try {
+
+                        java.net.URLDecoder.decode(
+                            item.substring(
+                                0,
+                                index
+                            ),
+                            "UTF-8"
+                        )
+
+                    } catch (_: Exception) {
+
+                        item.substring(
+                            0,
+                            index
+                        )
+                    }
+
+                val value =
+                    try {
+
+                        java.net.URLDecoder.decode(
+                            item.substring(
+                                index + 1
+                            ),
+                            "UTF-8"
+                        )
+
+                    } catch (_: Exception) {
+
+                        item.substring(
+                            index + 1
+                        )
+                    }
+
+                result[key] =
+                    value
+            }
+
+        return result
+    }
+
+    private fun syncWebViewSession(
+        token: String,
+        refresh: String?
+    ) {
+
+        val safeToken =
+            JSONObject.quote(token)
+
+        val safeRefresh =
+            JSONObject.quote(
+                refresh ?: ""
+            )
+
+        val script =
+            """
+            (async function() {
+                try {
+
+                    const accessToken =
+                        $safeToken;
+
+                    const refreshToken =
+                        $safeRefresh;
+
+                    const key =
+                        Object.keys(localStorage)
+                            .find(k =>
+                                k.includes("auth-token")
+                            );
+
+                    if (key) {
+
+                        let data = {};
+
+                        try {
+                            data =
+                                JSON.parse(
+                                    localStorage.getItem(key) || "{}"
+                                );
+                        } catch(e) {}
+
+                        data.access_token =
+                            accessToken;
+
+                        if (refreshToken) {
+                            data.refresh_token =
+                                refreshToken;
+                        }
+
+                        localStorage.setItem(
+                            key,
+                            JSON.stringify(data)
+                        );
+                    }
+
+                    return "ok";
+
+                } catch(e) {
+
+                    return "error";
+                }
+            })();
+            """.trimIndent()
+
+        webView.evaluateJavascript(
+            script
+        ) {
+            setStatus(
+                "✅ Google մուտք կատարված է\n" +
+                "Պատրաստ է LIVE-ի համար"
+            )
+        }
+    }
+
     private fun checkLogin() {
+
+        if (!accessToken.isNullOrBlank()) {
+
+            setStatus(
+                "✅ Մուտք կատարված է\n" +
+                "Պատրաստ է LIVE-ի համար"
+            )
+
+            startButton.isEnabled =
+                true
+
+            googleButton.visibility =
+                View.GONE
+
+            logoutButton.visibility =
+                View.VISIBLE
+
+            return
+        }
 
         webView.evaluateJavascript(
             """
             (function() {
-                try {
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        const value = localStorage.getItem(key);
 
-                        if (!value) continue;
+                try {
+
+                    for (
+                        let i = 0;
+                        i < localStorage.length;
+                        i++
+                    ) {
+
+                        const key =
+                            localStorage.key(i);
+
+                        const value =
+                            localStorage.getItem(key);
+
+                        if (!value) {
+                            continue;
+                        }
 
                         try {
-                            const obj = JSON.parse(value);
 
-                            if (obj && obj.access_token) {
+                            const obj =
+                                JSON.parse(value);
+
+                            if (
+                                obj &&
+                                obj.access_token
+                            ) {
+
                                 return obj.access_token;
                             }
 
-                            if (obj && obj.currentSession &&
-                                obj.currentSession.access_token) {
+                            if (
+                                obj &&
+                                obj.currentSession &&
+                                obj.currentSession.access_token
+                            ) {
+
                                 return obj.currentSession.access_token;
                             }
+
                         } catch(e) {}
                     }
 
                     return "";
+
                 } catch(e) {
+
                     return "";
                 }
+
             })();
             """.trimIndent()
         ) { result ->
 
-            val token = parseJavascriptString(result)
-
-            if (token.isNullOrBlank()) {
-
-                setStatus(
-                    "Մուտք գործիր AIMRELAX կայքում,\nհետո նորից բացիր Sender-ը։"
+            val token =
+                parseJavascriptString(
+                    result
                 )
 
-                startButton.isEnabled = false
+            if (
+                token.isNullOrBlank()
+            ) {
+
+                setStatus(
+                    "Մուտք գործեք AIMRELAX\n" +
+                    "Google-ով կամ Email/Password-ով։"
+                )
+
+                startButton.isEnabled =
+                    false
 
                 return@evaluateJavascript
             }
 
-            accessToken = token
-            userId = getUserIdFromJwt(token)
+            accessToken =
+                token
 
-            if (userId.isNullOrBlank()) {
+            userId =
+                getUserIdFromJwt(token)
 
-                setStatus("Could not read user account.")
+            if (
+                userId.isNullOrBlank()
+            ) {
 
-                startButton.isEnabled = false
+                setStatus(
+                    "Could not read user account."
+                )
+
+                startButton.isEnabled =
+                    false
 
                 return@evaluateJavascript
             }
 
-            setStatus("Ready to start LIVE")
+            setStatus(
+                "✅ Մուտք կատարված է\n" +
+                "Ready to start LIVE"
+            )
 
-            startButton.isEnabled = true
+            startButton.isEnabled =
+                true
+
+            googleButton.visibility =
+                View.GONE
+
+            logoutButton.visibility =
+                View.VISIBLE
         }
     }
 
-    private fun parseJavascriptString(value: String): String? {
+    private fun parseJavascriptString(
+        value: String
+    ): String? {
 
         if (value == "null") {
             return null
@@ -458,7 +1043,9 @@ class MainActivity : AppCompatActivity() {
         return try {
 
             val parsed =
-                org.json.JSONTokener(value).nextValue()
+                org.json.JSONTokener(
+                    value
+                ).nextValue()
 
             parsed?.toString()
 
@@ -467,15 +1054,21 @@ class MainActivity : AppCompatActivity() {
             value
                 .removePrefix("\"")
                 .removeSuffix("\"")
-                .replace("\\\"", "\"")
+                .replace(
+                    "\\\"",
+                    "\""
+                )
         }
     }
 
-    private fun getUserIdFromJwt(token: String): String? {
+    private fun getUserIdFromJwt(
+        token: String
+    ): String? {
 
         return try {
 
-            val parts = token.split(".")
+            val parts =
+                token.split(".")
 
             if (parts.size < 2) {
                 return null
@@ -488,7 +1081,21 @@ class MainActivity : AppCompatActivity() {
                     )
                 )
 
-            JSONObject(payload).optString("sub", "")
+            val sub =
+                JSONObject(
+                    payload
+                ).optString(
+                    "sub",
+                    ""
+                )
+
+            if (
+                sub.isBlank()
+            ) {
+                null
+            } else {
+                sub
+            }
 
         } catch (e: Exception) {
 
@@ -498,10 +1105,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun prepareLive() {
 
-        val token = accessToken
-        val uid = userId
+        val token =
+            accessToken
 
-        if (token.isNullOrBlank() ||
+        val uid =
+            userId
+
+        if (
+            token.isNullOrBlank() ||
             uid.isNullOrBlank()
         ) {
 
@@ -514,19 +1125,21 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        setStatus("Preparing LIVE...")
+        setStatus(
+            "Preparing LIVE..."
+        )
 
-        startButton.isEnabled = false
+        startButton.isEnabled =
+            false
 
         scope.launch {
 
             try {
 
-                val result =
-                    requestLiveToken(
-                        token,
-                        uid
-                    )
+                requestLiveToken(
+                    token,
+                    uid
+                )
 
                 roomName =
                     "aimrelax-live-$uid"
@@ -536,19 +1149,28 @@ class MainActivity : AppCompatActivity() {
                         MEDIA_PROJECTION_SERVICE
                     ) as MediaProjectionManager
 
-                val intent =
+                val captureIntent =
                     manager.createScreenCaptureIntent()
 
-                screenCaptureLauncher.launch(intent)
+                screenCaptureLauncher.launch(
+                    captureIntent
+                )
 
-                setStatus("Waiting for screen permission...")
+                setStatus(
+                    "Waiting for screen permission..."
+                )
 
             } catch (e: Exception) {
 
-                startButton.isEnabled = true
+                startButton.isEnabled =
+                    true
 
                 setStatus(
-                    "Error: ${e.message ?: "Unknown error"}"
+                    "Error: " +
+                    (
+                        e.message
+                            ?: "Unknown error"
+                    )
                 )
             }
         }
@@ -557,90 +1179,134 @@ class MainActivity : AppCompatActivity() {
     private suspend fun requestLiveToken(
         authToken: String,
         uid: String
-    ): JSONObject = withContext(Dispatchers.IO) {
+    ): JSONObject =
+        withContext(
+            Dispatchers.IO
+        ) {
 
-        val connection =
-            URL(LIVE_TOKEN_URL).openConnection()
+            val connection =
+                URL(
+                    LIVE_TOKEN_URL
+                ).openConnection()
                     as HttpURLConnection
 
-        connection.requestMethod = "POST"
-        connection.connectTimeout = 15000
-        connection.readTimeout = 15000
-        connection.doOutput = true
+            connection.requestMethod =
+                "POST"
 
-        connection.setRequestProperty(
-            "Authorization",
-            "Bearer $authToken"
-        )
+            connection.connectTimeout =
+                15000
 
-        connection.setRequestProperty(
-            "apikey",
-            SUPABASE_KEY
-        )
+            connection.readTimeout =
+                15000
 
-        connection.setRequestProperty(
-            "Content-Type",
-            "application/json"
-        )
+            connection.doOutput =
+                true
 
-        val body =
-            JSONObject()
-                .put("role", "host")
-                .put("room", "aimrelax-live-$uid")
-                .toString()
+            connection.setRequestProperty(
+                "Authorization",
+                "Bearer $authToken"
+            )
 
-        connection.outputStream.use {
-            it.write(body.toByteArray())
-        }
+            connection.setRequestProperty(
+                "apikey",
+                SUPABASE_KEY
+            )
 
-        val responseCode =
-            connection.responseCode
+            connection.setRequestProperty(
+                "Content-Type",
+                "application/json"
+            )
 
-        val stream =
-            if (responseCode in 200..299)
-                connection.inputStream
-            else
-                connection.errorStream
+            val body =
+                JSONObject()
+                    .put(
+                        "role",
+                        "host"
+                    )
+                    .put(
+                        "room",
+                        "aimrelax-live-$uid"
+                    )
+                    .toString()
 
-        val response =
-            stream.bufferedReader().use {
-                it.readText()
+            connection.outputStream.use {
+                it.write(
+                    body.toByteArray()
+                )
             }
 
-        connection.disconnect()
+            val responseCode =
+                connection.responseCode
 
-        if (responseCode !in 200..299) {
-            throw Exception(
-                "live-token HTTP $responseCode: $response"
+            val stream =
+                if (
+                    responseCode in 200..299
+                ) {
+
+                    connection.inputStream
+
+                } else {
+
+                    connection.errorStream
+                }
+
+            val response =
+                stream.bufferedReader()
+                    .use {
+                        it.readText()
+                    }
+
+            connection.disconnect()
+
+            if (
+                responseCode !in 200..299
+            ) {
+
+                throw Exception(
+                    "live-token HTTP " +
+                    "$responseCode: $response"
+                )
+            }
+
+            JSONObject(
+                response
             )
         }
-
-        JSONObject(response)
-    }
 
     private suspend fun startLiveKit(
         permissionData: Intent
     ) {
 
-        val token = accessToken
-        val uid = userId
-        val roomNameValue = roomName
+        val token =
+            accessToken
 
-        if (token.isNullOrBlank() ||
+        val uid =
+            userId
+
+        val roomNameValue =
+            roomName
+
+        if (
+            token.isNullOrBlank() ||
             uid.isNullOrBlank() ||
             roomNameValue.isNullOrBlank()
         ) {
 
-            setStatus("Login information missing")
+            setStatus(
+                "Login information missing"
+            )
 
-            startButton.isEnabled = true
+            startButton.isEnabled =
+                true
 
             return
         }
 
         try {
 
-            setStatus("Connecting to LIVE...")
+            setStatus(
+                "Connecting to LIVE..."
+            )
 
             val tokenData =
                 requestLiveToken(
@@ -649,35 +1315,45 @@ class MainActivity : AppCompatActivity() {
                 )
 
             val serverUrl =
-                tokenData.optString("server_url")
+                tokenData.optString(
+                    "server_url"
+                )
 
             val participantToken =
-                tokenData.optString("participant_token")
+                tokenData.optString(
+                    "participant_token"
+                )
 
-            if (serverUrl.isBlank() ||
+            if (
+                serverUrl.isBlank() ||
                 participantToken.isBlank()
             ) {
+
                 throw Exception(
                     "Invalid LiveKit token response"
                 )
             }
 
             val liveRoom =
-                LiveKit.create(applicationContext)
+                LiveKit.create(
+                    applicationContext
+                )
 
-            room = liveRoom
+            room =
+                liveRoom
 
             liveRoom.connect(
                 serverUrl,
                 participantToken
             )
 
-            liveRoom.localParticipant.setScreenShareEnabled(
-                true,
-                ScreenCaptureParams(
-                    permissionData
+            liveRoom.localParticipant
+                .setScreenShareEnabled(
+                    true,
+                    ScreenCaptureParams(
+                        permissionData
+                    )
                 )
-            )
 
             insertLiveStream(
                 token,
@@ -685,10 +1361,14 @@ class MainActivity : AppCompatActivity() {
                 roomNameValue
             )
 
-            isLive = true
+            isLive =
+                true
 
-            startButton.isEnabled = false
-            stopButton.isEnabled = true
+            startButton.isEnabled =
+                false
+
+            stopButton.isEnabled =
+                true
 
             setStatus(
                 "🔴 LIVE\n\n" +
@@ -698,15 +1378,25 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
 
             room?.disconnect()
-            room = null
 
-            isLive = false
+            room =
+                null
 
-            startButton.isEnabled = true
-            stopButton.isEnabled = false
+            isLive =
+                false
+
+            startButton.isEnabled =
+                true
+
+            stopButton.isEnabled =
+                false
 
             setStatus(
-                "LIVE ERROR:\n${e.message ?: "Unknown error"}"
+                "LIVE ERROR:\n" +
+                (
+                    e.message
+                        ?: "Unknown error"
+                )
             )
         }
     }
@@ -715,71 +1405,97 @@ class MainActivity : AppCompatActivity() {
         authToken: String,
         uid: String,
         roomNameValue: String
-    ) = withContext(Dispatchers.IO) {
+    ) =
+        withContext(
+            Dispatchers.IO
+        ) {
 
-        val url =
-            "$SUPABASE_REST" +
-            "live_streams"
+            val url =
+                "$SUPABASE_REST" +
+                "live_streams"
 
-        val connection =
-            URL(url).openConnection()
+            val connection =
+                URL(url).openConnection()
                     as HttpURLConnection
 
-        connection.requestMethod = "POST"
-        connection.connectTimeout = 15000
-        connection.readTimeout = 15000
-        connection.doOutput = true
+            connection.requestMethod =
+                "POST"
 
-        connection.setRequestProperty(
-            "apikey",
-            SUPABASE_KEY
-        )
+            connection.connectTimeout =
+                15000
 
-        connection.setRequestProperty(
-            "Authorization",
-            "Bearer $authToken"
-        )
+            connection.readTimeout =
+                15000
 
-        connection.setRequestProperty(
-            "Content-Type",
-            "application/json"
-        )
+            connection.doOutput =
+                true
 
-        connection.setRequestProperty(
-            "Prefer",
-            "return=minimal"
-        )
+            connection.setRequestProperty(
+                "apikey",
+                SUPABASE_KEY
+            )
 
-        val body =
-            JSONObject()
-                .put("streamer_id", uid)
-                .put("room_name", roomNameValue)
-                .put("status", "live")
-                .toString()
+            connection.setRequestProperty(
+                "Authorization",
+                "Bearer $authToken"
+            )
 
-        connection.outputStream.use {
-            it.write(body.toByteArray())
-        }
+            connection.setRequestProperty(
+                "Content-Type",
+                "application/json"
+            )
 
-        val responseCode =
-            connection.responseCode
+            connection.setRequestProperty(
+                "Prefer",
+                "return=minimal"
+            )
 
-        if (responseCode !in 200..299) {
+            val body =
+                JSONObject()
+                    .put(
+                        "streamer_id",
+                        uid
+                    )
+                    .put(
+                        "room_name",
+                        roomNameValue
+                    )
+                    .put(
+                        "status",
+                        "live"
+                    )
+                    .toString()
 
-            val error =
-                connection.errorStream
-                    ?.bufferedReader()
-                    ?.use { it.readText() }
+            connection.outputStream.use {
+                it.write(
+                    body.toByteArray()
+                )
+            }
+
+            val responseCode =
+                connection.responseCode
+
+            if (
+                responseCode !in 200..299
+            ) {
+
+                val error =
+                    connection.errorStream
+                        ?.bufferedReader()
+                        ?.use {
+                            it.readText()
+                        }
+
+                connection.disconnect()
+
+                throw Exception(
+                    "live_streams HTTP " +
+                    "$responseCode: $error"
+                )
+            }
 
             connection.disconnect()
-
-            throw Exception(
-                "live_streams HTTP $responseCode: $error"
-            )
         }
-
-        connection.disconnect()
-    }
 
     private fun stopLive() {
 
@@ -787,18 +1503,28 @@ class MainActivity : AppCompatActivity() {
 
             try {
 
-                setStatus("Stopping LIVE...")
+                setStatus(
+                    "Stopping LIVE..."
+                )
 
                 room?.localParticipant
-                    ?.setScreenShareEnabled(false)
+                    ?.setScreenShareEnabled(
+                        false
+                    )
 
                 room?.disconnect()
-                room = null
 
-                val token = accessToken
-                val uid = userId
+                room =
+                    null
 
-                if (!token.isNullOrBlank() &&
+                val token =
+                    accessToken
+
+                val uid =
+                    userId
+
+                if (
+                    !token.isNullOrBlank() &&
                     !uid.isNullOrBlank()
                 ) {
 
@@ -808,23 +1534,35 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
 
-                isLive = false
+                isLive =
+                    false
 
-                stopButton.isEnabled = false
-                startButton.isEnabled = true
+                stopButton.isEnabled =
+                    false
+
+                startButton.isEnabled =
+                    true
 
                 setStatus(
-                    "LIVE ended.\nReady for another stream."
+                    "LIVE ended.\n" +
+                    "Ready for another stream."
                 )
 
             } catch (e: Exception) {
 
                 setStatus(
-                    "Stop error: ${e.message}"
+                    "Stop error: " +
+                    (
+                        e.message
+                            ?: "Unknown error"
+                    )
                 )
 
-                stopButton.isEnabled = false
-                startButton.isEnabled = true
+                stopButton.isEnabled =
+                    false
+
+                startButton.isEnabled =
+                    true
             }
         }
     }
@@ -832,78 +1570,148 @@ class MainActivity : AppCompatActivity() {
     private suspend fun endLiveStream(
         authToken: String,
         uid: String
-    ) = withContext(Dispatchers.IO) {
+    ) =
+        withContext(
+            Dispatchers.IO
+        ) {
 
-        val filter =
-            "streamer_id=eq.$uid&status=eq.live"
+            val filter =
+                "streamer_id=eq.$uid&status=eq.live"
 
-        val url =
-            "$SUPABASE_REST" +
-            "live_streams?$filter"
+            val url =
+                "$SUPABASE_REST" +
+                "live_streams?$filter"
 
-        val connection =
-            URL(url).openConnection()
+            val connection =
+                URL(url).openConnection()
                     as HttpURLConnection
 
-        connection.requestMethod = "PATCH"
-        connection.connectTimeout = 15000
-        connection.readTimeout = 15000
-        connection.doOutput = true
+            connection.requestMethod =
+                "PATCH"
 
-        connection.setRequestProperty(
-            "apikey",
-            SUPABASE_KEY
-        )
+            connection.connectTimeout =
+                15000
 
-        connection.setRequestProperty(
-            "Authorization",
-            "Bearer $authToken"
-        )
+            connection.readTimeout =
+                15000
 
-        connection.setRequestProperty(
-            "Content-Type",
-            "application/json"
-        )
+            connection.doOutput =
+                true
 
-        connection.setRequestProperty(
-            "Prefer",
-            "return=minimal"
-        )
+            connection.setRequestProperty(
+                "apikey",
+                SUPABASE_KEY
+            )
 
-        val body =
-            JSONObject()
-                .put("status", "ended")
-                .toString()
+            connection.setRequestProperty(
+                "Authorization",
+                "Bearer $authToken"
+            )
 
-        connection.outputStream.use {
-            it.write(body.toByteArray())
+            connection.setRequestProperty(
+                "Content-Type",
+                "application/json"
+            )
+
+            connection.setRequestProperty(
+                "Prefer",
+                "return=minimal"
+            )
+
+            val body =
+                JSONObject()
+                    .put(
+                        "status",
+                        "ended"
+                    )
+                    .toString()
+
+            connection.outputStream.use {
+                it.write(
+                    body.toByteArray()
+                )
+            }
+
+            connection.responseCode
+
+            connection.disconnect()
         }
 
-        connection.responseCode
+    private fun logout() {
 
-        connection.disconnect()
+        scope.launch {
+
+            try {
+
+                room?.disconnect()
+
+            } catch (_: Exception) {
+            }
+
+            room =
+                null
+
+            isLive =
+                false
+
+            accessToken =
+                null
+
+            refreshToken =
+                null
+
+            userId =
+                null
+
+            roomName =
+                null
+
+            startButton.isEnabled =
+                false
+
+            stopButton.isEnabled =
+                false
+
+            googleButton.visibility =
+                View.VISIBLE
+
+            logoutButton.visibility =
+                View.GONE
+
+            setStatus(
+                "Դուք դուրս եք եկել։\n" +
+                "Մուտք գործեք Google-ով։"
+            )
+        }
     }
 
-    private fun setStatus(message: String) {
+    private fun setStatus(
+        message: String
+    ) {
 
         runOnUiThread {
 
-            statusText.text = message
+            statusText.text =
+                message
         }
     }
-override fun onDestroy() {
 
-    try {
-        room?.disconnect()
-    } catch (_: Exception) {
+    override fun onDestroy() {
+
+        try {
+
+            room?.disconnect()
+
+        } catch (_: Exception) {
+        }
+
+        room =
+            null
+
+        scope.cancel()
+
+        super.onDestroy()
     }
-
-    room = null
-
-    scope.cancel()
-
-    super.onDestroy()
-}
 }
 EOF
 
@@ -911,21 +1719,34 @@ echo "======================================"
 echo "Starting Gradle build..."
 echo "======================================"
 
-gradle :app:assembleRelease --no-daemon --stacktrace
+gradle :app:assembleRelease \
+    --no-daemon \
+    --stacktrace
 
-echo "======================================"
 echo "======================================"
 echo "BUILD SUCCESS"
 echo "======================================"
 
 echo "Searching for generated APK..."
 
-APK_PATH=$(find app/build/outputs/apk -type f -name "*.apk" | head -n 1)
+APK_PATH=$(
+    find app/build/outputs/apk \
+        -type f \
+        -name "*.apk" |
+        head -n 1
+)
 
 if [ -z "$APK_PATH" ]; then
+
     echo "ERROR: APK was not found."
+
     echo "Searching all build directories..."
-    find app/build -type f -name "*.apk" -print
+
+    find app/build \
+        -type f \
+        -name "*.apk" \
+        -print
+
     exit 1
 fi
 
@@ -934,11 +1755,24 @@ echo "$APK_PATH"
 
 ls -lh "$APK_PATH"
 
-mkdir -p app/build/outputs/apk/release
+mkdir -p \
+    app/build/outputs/apk/release
 
-if [ "$APK_PATH" != "app/build/outputs/apk/release/app-release.apk" ]; then
-    cp "$APK_PATH" app/build/outputs/apk/release/app-release.apk
+if [
+    "$APK_PATH" != \
+    "app/build/outputs/apk/release/app-release.apk"
+]; then
+
+    cp \
+        "$APK_PATH" \
+        app/build/outputs/apk/release/app-release.apk
 fi
 
 echo "FINAL APK:"
-ls -lh app/build/outputs/apk/release/app-release.apk
+
+ls -lh \
+    app/build/outputs/apk/release/app-release.apk
+
+echo "======================================"
+echo "AIMRELAX LIVE Sender APK READY"
+echo "======================================"
