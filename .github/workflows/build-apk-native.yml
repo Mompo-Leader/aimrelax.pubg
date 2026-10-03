@@ -1,0 +1,26 @@
+name: AIMRELAX LIVE V2 - Android Signed APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Build signed APK
+        env:
+          AIMRELAX_KEYSTORE_B64: ${{ secrets.AIMRELAX_KEYSTORE_B64 }}
+          AIMRELAX_STORE_PASSWORD: ${{ secrets.AIMRELAX_STORE_PASSWORD }}
+          AIMRELAX_KEY_PASSWORD: ${{ secrets.AIMRELAX_KEY_PASSWORD }}
+          AIMRELAX_KEY_ALIAS: ${{ secrets.AIMRELAX_KEY_ALIAS }}
+        run: bash build-live-v2.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AIMRELAX-LIVE-V2-ANDROID-SIGNED
+          path: release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
+          if-no-files-found: error
