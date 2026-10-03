@@ -3,46 +3,47 @@ name: AIMRELAX LIVE - Android Verified APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract AIMRELAX LIVE project
+      - name: Find AIMRELAX ZIP
         run: |
           set -e
 
-          echo "=== BEFORE EXTRACTION ==="
+          echo "=== Repository files ==="
           ls -la
 
-          if [ ! -f "AIMRELAX_LIVE_V10_ROOT_READY.zip" ]; then
-            echo "ERROR: AIMRELAX_LIVE_V10_ROOT_READY.zip not found"
+          ZIP=$(find . -maxdepth 1 -type f -name 'AIMRELAX_LIVE_*.zip' | head -n 1)
+
+          if [ -z "$ZIP" ]; then
+            echo "ERROR: AIMRELAX LIVE ZIP not found"
             exit 1
           fi
 
-          echo "=== EXTRACTING PROJECT ==="
-          unzip -o "AIMRELAX_LIVE_V10_ROOT_READY.zip" -d .
+          echo "Using ZIP: $ZIP"
 
-          echo "=== AFTER EXTRACTION ==="
+          unzip -o "$ZIP" -d .
+
+          echo "=== Extracted files ==="
           ls -la
-
-          echo "=== CHECK REQUIRED FILES ==="
 
           test -f "./build-live-v2.sh"
           test -f "./pubspec.yaml"
           test -d "./lib"
           test -d "./scripts"
 
-          echo "build-live-v2.sh FOUND"
-          echo "pubspec.yaml FOUND"
-          echo "lib/ FOUND"
-          echo "scripts/ FOUND"
-
           chmod +x ./build-live-v2.sh
           chmod +x ./scripts/prepare_signing.sh
+
+          echo "Project structure OK"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -54,37 +55,73 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
-      - name: Check Flutter
-        run: |
-          flutter --version
-
-      - name: Build AIMRELAX LIVE
-        run: |
-          set -e
-          chmod +x ./build-live-v2.sh
-          ./build-live-v2.sh
-
-      - name: Find generated APK
-        run: |
-          echo "=== ALL APK FILES ==="
-          find . -type f -name "*.apk" -print
-
-      - name: Verify APK exists
+      - name: Prepare signing
+        env:
+          AIMRELAX_KEYSTORE_B64: ${{ secrets.AIMRELAX_KEYSTORE_B64 }}
+          AIMRELAX_STORE_PASSWORD: ${{ secrets.AIMRELAX_STORE_PASSWORD }}
+          AIMRELAX_KEY_PASSWORD: ${{ secrets.AIMRELAX_KEY_PASSWORD }}
+          AIMRELAX_KEY_ALIAS: ${{ secrets.AIMRELAX_KEY_ALIAS }}
         run: |
           set -e
 
-          APK="release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk"
+          bash scripts/prepare_signing.sh
+          python3 scripts/configure_android.py
 
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: Signed APK was not generated"
-            exit 1
-          fi
+      - name: Build APK
+        run: |
+          set -e
 
-          echo "SIGNED APK FOUND:"
-          ls -lh "$APK"
+          flutter pub get
+          flutter analyze
+          flutter clean
+          flutter pub get
+          flutter build apk --release
 
-      - name: Upload verified APK
+      - name: Sign APK
+        run: |
+          set -e
+
+          source android/signing.env
+
+          UNSIGNED="build/app/outputs/flutter-apk/app-release.apk"
+
+          test -s "$UNSIGNED"
+
+          APKSIGNER=$(find "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools" \
+            -type f -name apksigner | sort -V | tail -n 1)
+
+          test -n "$APKSIGNER"
+
+          mkdir -p release
+
+          "$APKSIGNER" sign \
+            --ks "$AIMRELAX_KEYSTORE" \
+            --ks-key-alias "$AIMRELAX_KEY_ALIAS" \
+            --ks-pass "pass:$AIMRELAX_STORE_PASSWORD" \
+            --key-pass "pass:$AIMRELAX_KEY_PASSWORD" \
+            --out release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk \
+            "$UNSIGNED"
+
+      - name: Verify signature
+        run: |
+          set -e
+
+          APKSIGNER=$(find "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools" \
+            -type f -name apksigner | sort -V | tail -n 1)
+
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
+
+          unzip -l release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk \
+            | grep -E 'META-INF/.*\.(RSA|DSA|EC|SF)$'
+
+          echo "APK SIGNATURE VERIFIED"
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AIMRELAX-LIVE-VERIFIED-ANDROID-APK
