@@ -1,26 +1,104 @@
-name: AIMRELAX LIVE V2 - Android Signed APK
+name: AIMRELAX LIVE — Android VERIFIED APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - name: Build signed APK
+
+      - name: Locate and unpack AIMRELAX Flutter project
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== LOCATING AIMRELAX FLUTTER PROJECT ==='
+
+          if [[ -f build-live-v2.sh && -f pubspec.yaml ]]; then
+            echo 'Flutter project already exists at repository root.'
+          else
+            echo 'Root project is missing. Searching ZIP files...'
+            ZIP=$(find . -type f -name 'AIMRELAX_LIVE*.zip' -not -path './.git/*' | sort | head -n 1 || true)
+            if [[ -z "$ZIP" ]]; then
+              echo 'ERROR: No AIMRELAX_LIVE*.zip was found and build-live-v2.sh is missing.'
+              find . -maxdepth 4 -type f | sort | head -200
+              exit 127
+            fi
+
+            echo "Using ZIP: $ZIP"
+            rm -rf .aimrelax_extract
+            mkdir -p .aimrelax_extract
+            unzip -q -o "$ZIP" -d .aimrelax_extract
+
+            SCRIPT=$(find .aimrelax_extract -type f -name 'build-live-v2.sh' | head -n 1 || true)
+            if [[ -z "$SCRIPT" ]]; then
+              echo 'ERROR: ZIP does not contain build-live-v2.sh.'
+              find .aimrelax_extract -maxdepth 6 -type f | sort | head -300
+              exit 127
+            fi
+
+            PROJECT_DIR=$(dirname "$SCRIPT")
+            echo "Flutter project found at: $PROJECT_DIR"
+            cp -a "$PROJECT_DIR"/. .
+          fi
+
+          test -f pubspec.yaml || { echo 'ERROR: pubspec.yaml missing after extraction.'; exit 127; }
+          test -f build-live-v2.sh || { echo 'ERROR: build-live-v2.sh missing after extraction.'; exit 127; }
+          test -f scripts/prepare_signing.sh || { echo 'ERROR: scripts/prepare_signing.sh missing.'; exit 127; }
+          test -f scripts/configure_android.py || { echo 'ERROR: scripts/configure_android.py missing.'; exit 127; }
+          echo '=== PROJECT READY ==='
+          ls -la
+
+      - name: Ensure modern Flutter Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f android/app/src/main/kotlin/com/aimrelax/aimrelax_live/MainActivity.kt ]]; then
+            echo 'Incomplete Android host detected; regenerating modern Flutter Android project.'
+            rm -rf android
+            flutter create --platforms=android --org=com.aimrelax --project-name=aimrelax_live .
+          fi
+          test -f android/app/src/main/AndroidManifest.xml
+          test -f android/app/src/main/kotlin/com/aimrelax/aimrelax_live/MainActivity.kt
+
+      - name: Prepare explicit signing
         env:
           AIMRELAX_KEYSTORE_B64: ${{ secrets.AIMRELAX_KEYSTORE_B64 }}
           AIMRELAX_STORE_PASSWORD: ${{ secrets.AIMRELAX_STORE_PASSWORD }}
           AIMRELAX_KEY_PASSWORD: ${{ secrets.AIMRELAX_KEY_PASSWORD }}
           AIMRELAX_KEY_ALIAS: ${{ secrets.AIMRELAX_KEY_ALIAS }}
-        run: bash build-live-v2.sh
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_signing.sh
+          python3 scripts/configure_android.py
+
+      - name: Build signed APK through project build script
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash build-live-v2.sh
+
+      - name: Verify final APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
+          APKSIGNER=$(find "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          "$APKSIGNER" verify --verbose --print-certs release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: AIMRELAX-LIVE-V2-ANDROID-SIGNED
+          name: AIMRELAX-LIVE-VERIFIED-ANDROID-APK
           path: release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
           if-no-files-found: error
