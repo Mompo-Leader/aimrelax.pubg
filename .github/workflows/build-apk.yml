@@ -8,18 +8,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check project files
+      - name: Extract AIMRELAX LIVE project
         run: |
-          echo "=== ROOT ==="
-          pwd
+          set -e
+
+          echo "=== BEFORE EXTRACTION ==="
           ls -la
-          echo "=== BUILD SCRIPT ==="
-          test -f ./build-live-v2.sh
-          ls -l ./build-live-v2.sh
+
+          if [ ! -f "AIMRELAX_LIVE_V10_ROOT_READY.zip" ]; then
+            echo "ERROR: AIMRELAX_LIVE_V10_ROOT_READY.zip not found"
+            exit 1
+          fi
+
+          echo "=== EXTRACTING PROJECT ==="
+          unzip -o "AIMRELAX_LIVE_V10_ROOT_READY.zip" -d .
+
+          echo "=== AFTER EXTRACTION ==="
+          ls -la
+
+          echo "=== CHECK REQUIRED FILES ==="
+
+          test -f "./build-live-v2.sh"
+          test -f "./pubspec.yaml"
+          test -d "./lib"
+          test -d "./scripts"
+
+          echo "build-live-v2.sh FOUND"
+          echo "pubspec.yaml FOUND"
+          echo "lib/ FOUND"
+          echo "scripts/ FOUND"
+
           chmod +x ./build-live-v2.sh
+          chmod +x ./scripts/prepare_signing.sh
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -32,21 +55,38 @@ jobs:
         with:
           channel: stable
 
-      - name: Build signed APK
+      - name: Check Flutter
         run: |
+          flutter --version
+
+      - name: Build AIMRELAX LIVE
+        run: |
+          set -e
           chmod +x ./build-live-v2.sh
           ./build-live-v2.sh
 
-      - name: Find APK
+      - name: Find generated APK
         run: |
-          echo "=== APK FILES ==="
+          echo "=== ALL APK FILES ==="
           find . -type f -name "*.apk" -print
 
-      - name: Upload APK
+      - name: Verify APK exists
+        run: |
+          set -e
+
+          APK="release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: Signed APK was not generated"
+            exit 1
+          fi
+
+          echo "SIGNED APK FOUND:"
+          ls -lh "$APK"
+
+      - name: Upload verified APK
         uses: actions/upload-artifact@v4
         with:
           name: AIMRELAX-LIVE-VERIFIED-ANDROID-APK
-          path: |
-            release/*.apk
-            build/app/outputs/flutter-apk/*.apk
+          path: release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
           if-no-files-found: error
