@@ -1,26 +1,85 @@
-name: AIMRELAX LIVE V2 - Android Signed APK
+name: AIMRELAX LIVE — Android VERIFIED APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Prepare Flutter project from ZIP or repository root
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f pubspec.yaml || ! -f build-live-v2.sh ]]; then
+            echo "Project files are not at repository root. Looking for AIMRELAX_LIVE ZIP..."
+            ZIP="$(find . -maxdepth 2 -type f -iname 'AIMRELAX_LIVE*.zip' -printf '%T@ %p\n' | sort -nr | head -n 1 | cut -d' ' -f2-)"
+            if [[ -z "${ZIP:-}" ]]; then
+              echo "ERROR: build-live-v2.sh and pubspec.yaml are missing, and no AIMRELAX_LIVE*.zip was found."
+              find . -maxdepth 3 -type f | sort | head -200
+              exit 127
+            fi
+
+            echo "Extracting: $ZIP"
+            rm -rf .aimrelax_extract
+            mkdir -p .aimrelax_extract
+            unzip -q -o "$ZIP" -d .aimrelax_extract
+
+            # Handle both root-level ZIPs and ZIPs containing one project folder.
+            if [[ -f .aimrelax_extract/pubspec.yaml && -f .aimrelax_extract/build-live-v2.sh ]]; then
+              cp -a .aimrelax_extract/. .
+            else
+              ROOT="$(find .aimrelax_extract -mindepth 1 -maxdepth 2 -type f -name pubspec.yaml -print -quit | xargs -r dirname)"
+              if [[ -z "${ROOT:-}" || ! -f "$ROOT/build-live-v2.sh" ]]; then
+                echo "ERROR: ZIP does not contain a valid Flutter project with build-live-v2.sh."
+                find .aimrelax_extract -maxdepth 4 -type f | sort | head -200
+                exit 127
+              fi
+              cp -a "$ROOT"/. .
+            fi
+            rm -rf .aimrelax_extract
+          fi
+
+          test -f pubspec.yaml
+          test -f build-live-v2.sh
+          echo "READY:"
+          ls -l pubspec.yaml build-live-v2.sh
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
       - name: Build signed APK
+        shell: bash
         env:
           AIMRELAX_KEYSTORE_B64: ${{ secrets.AIMRELAX_KEYSTORE_B64 }}
           AIMRELAX_STORE_PASSWORD: ${{ secrets.AIMRELAX_STORE_PASSWORD }}
           AIMRELAX_KEY_PASSWORD: ${{ secrets.AIMRELAX_KEY_PASSWORD }}
           AIMRELAX_KEY_ALIAS: ${{ secrets.AIMRELAX_KEY_ALIAS }}
-        run: bash build-live-v2.sh
-      - uses: actions/upload-artifact@v4
+        run: |
+          set -euo pipefail
+          chmod +x build-live-v2.sh scripts/prepare_signing.sh
+          bash ./build-live-v2.sh
+
+      - name: Verify output exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
+          ls -lh release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
+
+      - name: Upload verified APK
+        uses: actions/upload-artifact@v4
         with:
-          name: AIMRELAX-LIVE-V2-ANDROID-SIGNED
+          name: AIMRELAX-LIVE-VERIFIED-ANDROID-APK
           path: release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
           if-no-files-found: error
