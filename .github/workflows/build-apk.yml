@@ -1,4 +1,4 @@
-name: AIMRELAX LIVE V2 - Android Signed APK
+name: AIMRELAX LIVE - Android Verified APK
 
 on:
   workflow_dispatch:
@@ -6,21 +6,47 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check project files
+        run: |
+          echo "=== ROOT ==="
+          pwd
+          ls -la
+          echo "=== BUILD SCRIPT ==="
+          test -f ./build-live-v2.sh
+          ls -l ./build-live-v2.sh
+          chmod +x ./build-live-v2.sh
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true
+
       - name: Build signed APK
-        env:
-          AIMRELAX_KEYSTORE_B64: ${{ secrets.AIMRELAX_KEYSTORE_B64 }}
-          AIMRELAX_STORE_PASSWORD: ${{ secrets.AIMRELAX_STORE_PASSWORD }}
-          AIMRELAX_KEY_PASSWORD: ${{ secrets.AIMRELAX_KEY_PASSWORD }}
-          AIMRELAX_KEY_ALIAS: ${{ secrets.AIMRELAX_KEY_ALIAS }}
-        run: bash build-live-v2.sh
-      - uses: actions/upload-artifact@v4
+        run: |
+          chmod +x ./build-live-v2.sh
+          ./build-live-v2.sh
+
+      - name: Find APK
+        run: |
+          echo "=== APK FILES ==="
+          find . -type f -name "*.apk" -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          name: AIMRELAX-LIVE-V2-ANDROID-SIGNED
-          path: release/AIMRELAX-LIVE-V2-ANDROID-SIGNED.apk
+          name: AIMRELAX-LIVE-VERIFIED-ANDROID-APK
+          path: |
+            release/*.apk
+            build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
