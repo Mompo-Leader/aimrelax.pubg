@@ -29,7 +29,10 @@ jobs:
             echo 'Flutter project already exists at repository root.'
           else
             echo 'Root project is missing. Searching ZIP files...'
-            ZIP=$(find . -type f -name 'AIMRELAX_LIVE*.zip' -not -path './.git/*' | sort | head -n 1 || true)
+            ZIP=$(find . -type f -name 'AIMRELAX_LIVE_V13_NATIVE_GOOGLE_LOGIN.zip' -not -path './.git/*' | head -n 1 || true)
+            if [[ -z "$ZIP" ]]; then
+              ZIP=$(find . -type f -name 'AIMRELAX_LIVE*.zip' -not -path './.git/*' | sort | tail -n 1 || true)
+            fi
             if [[ -z "$ZIP" ]]; then
               echo 'ERROR: No AIMRELAX_LIVE*.zip was found and build-live-v2.sh is missing.'
               find . -maxdepth 4 -type f | sort | head -200
