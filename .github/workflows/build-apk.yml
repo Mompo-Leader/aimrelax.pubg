@@ -29,10 +29,7 @@ jobs:
             echo 'Flutter project already exists at repository root.'
           else
             echo 'Root project is missing. Searching ZIP files...'
-            ZIP=$(find . -type f -name 'AIMRELAX_LIVE_V13_NATIVE_GOOGLE_LOGIN.zip' -not -path './.git/*' | head -n 1 || true)
-            if [[ -z "$ZIP" ]]; then
-              ZIP=$(find . -type f -name 'AIMRELAX_LIVE*.zip' -not -path './.git/*' | sort | tail -n 1 || true)
-            fi
+            ZIP=$(find . -type f -name 'AIMRELAX_LIVE_V14*.zip' -not -path './.git/*' | sort | head -n 1 || true)
             if [[ -z "$ZIP" ]]; then
               echo 'ERROR: No AIMRELAX_LIVE*.zip was found and build-live-v2.sh is missing.'
               find . -maxdepth 4 -type f | sort | head -200
@@ -75,6 +72,9 @@ jobs:
           test -f android/app/src/main/AndroidManifest.xml
           test -f android/app/src/main/kotlin/com/aimrelax/aimrelax_live/MainActivity.kt
 
+      - name: Verify authentication configuration
+        run: python3 scripts/verify_auth_config.py
+
       - name: Prepare explicit signing
         env:
           AIMRELAX_KEYSTORE_B64: ${{ secrets.AIMRELAX_KEYSTORE_B64 }}
@@ -85,6 +85,13 @@ jobs:
           set -euo pipefail
           bash scripts/prepare_signing.sh
           python3 scripts/configure_android.py
+
+      - name: Show signing certificate fingerprint for Google OAuth
+        shell: bash
+        run: |
+          set -euo pipefail
+          source android/signing.env
+          keytool -list -v -keystore "$AIMRELAX_KEYSTORE" -alias "$AIMRELAX_KEY_ALIAS" -storepass "$AIMRELAX_STORE_PASSWORD" | grep -E 'Owner:|SHA1:|SHA-256:' || true
 
       - name: Build signed APK through project build script
         shell: bash
