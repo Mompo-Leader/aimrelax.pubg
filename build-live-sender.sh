@@ -14,6 +14,7 @@ if [[ ! -f android/app/build.gradle.kts || ! -f android/app/src/main/kotlin/com/
 fi
 bash scripts/prepare_signing.sh
 python3 scripts/configure_android.py
+python3 scripts/verify_auth_config.py
 flutter pub get
 flutter analyze
 flutter clean
