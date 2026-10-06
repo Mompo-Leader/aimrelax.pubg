@@ -1,1 +1,482 @@
-<!doctype html><html lang="hy"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AIMRELAX LIVE</title><style>body{background:#080808;color:#fff;font-family:Arial;margin:0}.wrap{max-width:900px;margin:auto;padding:22px}.card{display:block;color:#fff;text-decoration:none;background:#141414;border-radius:14px;padding:18px;margin:12px 0}.live{color:#f44;font-weight:700}</style></head><body><div class="wrap"><h1>🔴 AIMRELAX LIVE</h1><div id="list">Loading…</div></div><script type="module">import{createClient}from'https://esm.sh/@supabase/supabase-js@2';const db=createClient('https://hvhlrbfjloiahbqmnrly.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aGxyYmZqbG9pYWhicW1ucmx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3MTMyNjMsImV4cCI6MjEwNTI4OTI2M30.lOrLiuJ3SZ9LtQxZu3aHcVE_e_7eOWVxPoaG36l0f8M');const list=document.querySelector('#list');const {data,error}=await db.from('live_streams').select('id,title,streamer_name,viewer_count,created_at').eq('status','live').order('created_at',{ascending:false});if(error)list.textContent=error.message;else if(!data?.length)list.textContent='Այս պահին LIVE չկա';else list.innerHTML=data.map(x=>`<a class="card" href="live.html?stream_id=${x.id}"><div class="live">🔴 LIVE</div><h2>${x.title||'PUBG LIVE'}</h2><div>${x.streamer_name||'Streamer'} • 👁 ${x.viewer_count||0}</div></a>`).join('');</script></body></html>
+<!doctype html>
+<html lang="hy">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>AIMRELAX LIVE</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0b0b0f;
+      color: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    main {
+      width: min(1200px, 100%);
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .back {
+      color: #aaa;
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .back:hover {
+      color: #fff;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 30px;
+    }
+
+    .live-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .live-dot {
+      width: 10px;
+      height: 10px;
+      background: #ff1744;
+      border-radius: 50%;
+      box-shadow: 0 0 12px rgba(255, 23, 68, .8);
+    }
+
+    #status {
+      color: #999;
+      margin-bottom: 20px;
+    }
+
+    #streams {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 18px;
+    }
+
+    .stream-card {
+      display: block;
+      color: inherit;
+      text-decoration: none;
+      background: #15151c;
+      border: 1px solid #24242d;
+      border-radius: 14px;
+      overflow: hidden;
+      transition: transform .18s ease, border-color .18s ease;
+    }
+
+    .stream-card:hover {
+      transform: translateY(-3px);
+      border-color: #ff1744;
+    }
+
+    .preview {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background:
+        radial-gradient(circle at center, #252532 0%, #111117 65%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .no-preview {
+      font-size: 48px;
+      opacity: .75;
+    }
+
+    .live-badge {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 5px 9px;
+      border-radius: 6px;
+      background: #ff1744;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .viewer-badge {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      padding: 5px 8px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, .75);
+      color: #fff;
+      font-size: 12px;
+    }
+
+    .info {
+      padding: 13px 14px 15px;
+    }
+
+    .stream-name {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .streamer {
+      color: #aaa;
+      font-size: 13px;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 70px 20px;
+      color: #888;
+    }
+
+    .empty-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .error {
+      padding: 18px;
+      background: #211117;
+      border: 1px solid #54202d;
+      border-radius: 10px;
+      color: #ff9aae;
+    }
+
+    @media (max-width: 600px) {
+      main {
+        padding: 15px;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      #streams {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<main>
+
+  <div class="top">
+    <a class="back" href="index.html">← Գլխավոր</a>
+
+    <div class="live-title">
+      <span class="live-dot"></span>
+      <h1>LIVE</h1>
+    </div>
+  </div>
+
+  <div id="status">LIVE-երի ստուգում…</div>
+
+  <div id="streams"></div>
+
+</main>
+
+<script type="module">
+
+  import { createClient }
+    from "https://esm.sh/@supabase/supabase-js@2";
+
+  /*
+   * AIMRELAX SUPABASE
+   */
+
+  const SUPABASE_URL =
+    "https://hvhlrbfjloiahbqmnrly.supabase.co";
+
+  const SUPABASE_ANON_KEY =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aGxyYmZqbG9pYWhicW1ucmx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3MTMyNjMsImV4cCI6MjEwNTI4OTI2M30.lOrLiuJ3SZ9LtQxZu3aHcVE_e_7eOWVxPoaG36l0f8M";
+
+  const supabase = createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY
+  );
+
+
+  const streamsElement =
+    document.getElementById("streams");
+
+  const statusElement =
+    document.getElementById("status");
+
+
+  /*
+   * Load active streams
+   */
+
+  async function loadStreams() {
+
+    statusElement.textContent =
+      "LIVE-երի ստուգում…";
+
+    const {
+      data,
+      error
+    } = await supabase
+
+      .from("live_streams")
+
+      .select(`
+        id,
+        streamer_name,
+        title,
+        status,
+        viewer_count,
+        thumbnail_url,
+        created_at
+      `)
+
+      .in("status", ["live", "starting"])
+
+      .order("created_at", {
+        ascending: false
+      });
+
+
+    if (error) {
+
+      console.error(
+        "LIVE list error:",
+        error
+      );
+
+      streamsElement.innerHTML = `
+        <div class="error">
+          Չհաջողվեց բեռնել LIVE-երը։
+          <br><br>
+          ${escapeHtml(error.message)}
+        </div>
+      `;
+
+      statusElement.textContent =
+        "Սխալ";
+
+      return;
+    }
+
+
+    renderStreams(data || []);
+  }
+
+
+  /*
+   * Render stream cards
+   */
+
+  function renderStreams(streams) {
+
+    streamsElement.innerHTML = "";
+
+
+    if (!streams.length) {
+
+      streamsElement.innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">📺</div>
+          <div>Այս պահին ակտիվ LIVE չկա։</div>
+        </div>
+      `;
+
+      statusElement.textContent =
+        "Այս պահին LIVE չկա";
+
+      return;
+    }
+
+
+    statusElement.textContent =
+      `${streams.length} ակտիվ LIVE`;
+
+
+    for (const stream of streams) {
+
+      const card =
+        document.createElement("a");
+
+      card.className =
+        "stream-card";
+
+      card.href =
+        `live.html?stream_id=${encodeURIComponent(stream.id)}`;
+
+
+      const title =
+        stream.title?.trim()
+          || "AIMRELAX LIVE";
+
+      const streamer =
+        stream.streamer_name?.trim()
+          || "AIMRELAX";
+
+      const viewers =
+        Number.isFinite(Number(stream.viewer_count))
+          ? Number(stream.viewer_count)
+          : 0;
+
+
+      let preview = `
+        <div class="no-preview">🎮</div>
+      `;
+
+
+      if (stream.thumbnail_url) {
+
+        preview = `
+          <img
+            src="${escapeAttribute(stream.thumbnail_url)}"
+            alt="${escapeAttribute(title)}"
+            loading="lazy"
+          >
+        `;
+      }
+
+
+      card.innerHTML = `
+
+        <div class="preview">
+
+          ${preview}
+
+          <div class="live-badge">
+            ● LIVE
+          </div>
+
+          <div class="viewer-badge">
+            👁 ${viewers}
+          </div>
+
+        </div>
+
+        <div class="info">
+
+          <div class="stream-name">
+            ${escapeHtml(title)}
+          </div>
+
+          <div class="streamer">
+            ${escapeHtml(streamer)}
+          </div>
+
+        </div>
+
+      `;
+
+
+      streamsElement.appendChild(card);
+    }
+  }
+
+
+  /*
+   * Realtime:
+   * automatically refresh when a LIVE
+   * starts, changes or ends.
+   */
+
+  const channel =
+    supabase
+
+      .channel("aimrelax-live-list")
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "live_streams"
+        },
+        () => {
+          loadStreams();
+        }
+      )
+
+      .subscribe();
+
+
+  /*
+   * Escape HTML
+   */
+
+  function escapeHtml(value) {
+
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+
+  function escapeAttribute(value) {
+
+    return escapeHtml(value);
+  }
+
+
+  /*
+   * Initial load
+   */
+
+  loadStreams();
+
+
+  /*
+   * Also refresh periodically as a backup.
+   */
+
+  setInterval(
+    loadStreams,
+    15000
+  );
+
+
+  /*
+   * Cleanup
+   */
+
+  window.addEventListener(
+    "beforeunload",
+    () => {
+      supabase.removeChannel(channel);
+    }
+  );
+
+</script>
+
+</body>
+</html>
