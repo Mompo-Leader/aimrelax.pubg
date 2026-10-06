@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Room, RoomEvent, Track } from 'https://esm.sh/livekit-client@2.15.6';
-const SUPABASE_URL='https://YOUR_PROJECT.supabase.co'; const SUPABASE_ANON_KEY='YOUR_SUPABASE_ANON_KEY';
+const SUPABASE_URL='https://hvhlrbfjloiahbqmnrly.supabase.co'; const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2aGxyYmZqbG9pYWhicW1ucmx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3MTMyNjMsImV4cCI6MjEwNTI4OTI2M30.lOrLiuJ3SZ9LtQxZu3aHcVE_e_7eOWVxPoaG36l0f8M';
 const db=createClient(SUPABASE_URL,SUPABASE_ANON_KEY); const qs=new URLSearchParams(location.search); const streamId=qs.get('stream_id');
 const $=id=>document.getElementById(id); let room,stream,user,heartbeat;
 function esc(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
